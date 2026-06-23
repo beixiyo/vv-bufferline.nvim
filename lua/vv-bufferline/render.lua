@@ -34,14 +34,14 @@ local function truncate_name(name, max_width)
   return chars .. '…'
 end
 
-local function item_for(buf, current, counts, diag_snapshot, config)
+local function item_for(win, buf, current, counts, diag_snapshot, config)
   local modified = vim.bo[buf].modified
   local label = truncate_name(buf_name(buf, counts), config.max_name_width)
   local mark = modified and '● ' or ''
   local icon, icon_hl = Icons.get(buf, current)
   local icon_text = icon ~= '' and (' ' .. icon .. ' ') or ' '
-  local close = config.show_close and '× ' or ''
   local diag = Diagnostics.component(buf, diag_snapshot, current, config.diagnostics or {})
+  local close_visible = config.show_close or (config.hover_close and State.hovered_buf(win) == buf)
 
   local tab_hl = current and 'VVBufferlineCurrent' or 'VVBufferlineTab'
   local mod_hl = current and 'VVBufferlineCurrentModified' or 'VVBufferlineTabModified'
@@ -65,19 +65,19 @@ local function item_for(buf, current, counts, diag_snapshot, config)
     text = text .. diag.text
   end
 
-  rendered = rendered .. '%#' .. tab_hl .. '#' .. click('__vv_bufferline_select', buf, ' ')
   text = text .. ' '
-
-  if close ~= '' then
+  if close_visible then
     rendered = rendered
       .. '%#' .. close_hl .. '#'
-      .. click('__vv_bufferline_close', buf, close)
+      .. click('__vv_bufferline_close', buf, '×')
+  else
+    rendered = rendered .. '%#' .. tab_hl .. '#' .. click('__vv_bufferline_select', buf, ' ')
   end
 
   return {
     buf = buf,
     current = current,
-    width = vim.fn.strdisplaywidth(text .. close),
+    width = vim.fn.strdisplaywidth(text),
     rendered = rendered,
   }
 end
@@ -137,7 +137,10 @@ end
 ---@param win integer
 ---@param config VVBufferlineConfig
 function M.render(win, config)
-  if not State.should_show(win) then return '' end
+  if not State.should_show(win) then
+    State.clear_layout(win)
+    return ''
+  end
 
   local buf = vim.api.nvim_win_get_buf(win)
   -- 当前 buffer 不纳入分组的两种情况：
@@ -158,7 +161,7 @@ function M.render(win, config)
   local diag_snapshot = Diagnostics.snapshot()
   local items = {}
   for _, b in ipairs(s.bufs) do
-    table.insert(items, item_for(b, b == buf, counts, diag_snapshot, config))
+    table.insert(items, item_for(win, b, b == buf, counts, diag_snapshot, config))
   end
 
   local max_width = math.max(8, vim.api.nvim_win_get_width(win) - 1)
@@ -170,9 +173,18 @@ function M.render(win, config)
     table.insert(parts, '%#VVBufferlineTrunc# … ')
   end
 
+  local col = visible.leading_trunc and (vim.fn.strdisplaywidth(' … ') + 1) or 1
+  local layout = {}
   for _, item in ipairs(visible) do
     table.insert(parts, item.rendered)
+    table.insert(layout, {
+      buf = item.buf,
+      start_col = col,
+      end_col = col + item.width - 1,
+    })
+    col = col + item.width
   end
+  State.set_layout(win, layout)
 
   if visible.trailing_trunc then
     table.insert(parts, '%#VVBufferlineTrunc# … ')

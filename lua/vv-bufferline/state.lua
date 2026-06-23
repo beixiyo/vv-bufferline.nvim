@@ -5,6 +5,8 @@ local M = {
   owned_winbars = {},
   previous_winbars = {},
   preview_bufs = {},
+  layouts = {},
+  hover = nil,
   -- removed[win][buf] = true：用户在该窗口「显式删除」过的 buffer
   -- 自动追踪（track_current）必须尊重它，不能因为后续某次 BufEnter 把它复原；
   -- 只有「显式打开」（select / 在该窗口落定显示该 buf → add）才会清除该标记
@@ -293,6 +295,62 @@ function M.remove_buf(buf)
   for win, r in pairs(M.removed) do
     if r[buf] then M.clear_removed(win, buf) end
   end
+
+  if M.hover and M.hover.buf == buf then M.hover = nil end
+end
+
+---@param win integer
+---@param items {buf:integer,start_col:integer,end_col:integer}[]
+function M.set_layout(win, items)
+  M.layouts[win] = items or {}
+end
+
+---@param win integer
+function M.clear_layout(win)
+  M.layouts[win] = nil
+end
+
+---@param win integer
+---@param col integer
+---@return integer?
+function M.buf_at(win, col)
+  local items = M.layouts[win]
+  if not items then return nil end
+
+  for _, item in ipairs(items) do
+    if col >= item.start_col and col <= item.end_col then
+      return item.buf
+    end
+  end
+end
+
+---@param win integer
+---@param buf integer
+---@return boolean changed
+function M.set_hovered(win, buf)
+  if not vim.api.nvim_win_is_valid(win) then return M.clear_hovered() end
+  if not M.normal_buf(buf) then return M.clear_hovered() end
+
+  if M.hover and M.hover.win == win and M.hover.buf == buf then return false end
+
+  M.hover = { win = win, buf = buf }
+  return true
+end
+
+---@return boolean changed
+function M.clear_hovered()
+  if not M.hover then return false end
+
+  M.hover = nil
+  return true
+end
+
+---@param win integer
+---@return integer?
+function M.hovered_buf(win)
+  if not M.hover or M.hover.win ~= win then return nil end
+
+  return M.hover.buf
 end
 
 ---@param win integer
@@ -343,6 +401,8 @@ function M.remove_win(win)
   M.previous_winbars[win] = nil
   M.preview_bufs[win] = nil
   M.removed[win] = nil
+  M.layouts[win] = nil
+  if M.hover and M.hover.win == win then M.hover = nil end
 end
 
 function M.reset()
@@ -351,6 +411,8 @@ function M.reset()
   M.previous_winbars = {}
   M.preview_bufs = {}
   M.removed = {}
+  M.layouts = {}
+  M.hover = nil
 end
 
 return M

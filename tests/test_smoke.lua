@@ -96,6 +96,49 @@ test('renders highest diagnostic severity and count', function()
   assert(vim.wo.winbar:find('VVBufferlineDiagCurrentVVDiagError', 1, true), 'diagnostic highlight missing')
 end)
 
+test('shows close button on hover without growing item width', function()
+  setup()
+  vim.cmd('edit /tmp/vv-bufferline-hover-a.ts')
+  vim.cmd('edit /tmp/vv-bufferline-hover-b.ts')
+  vim.wait(100)
+
+  local State = require('vv-bufferline.state')
+  local View = require('vv-bufferline.view')
+  local win = vim.api.nvim_get_current_win()
+  local buf = vim.api.nvim_get_current_buf()
+  local before = vim.wo[win].winbar
+  local before_width
+  for _, item in ipairs(State.layouts[win] or {}) do
+    if item.buf == buf then
+      before_width = item.end_col - item.start_col + 1
+      break
+    end
+  end
+
+  assert(before_width, 'hovered buffer was not recorded in layout')
+  assert(not before:find('×', 1, true), 'close button should be hidden before hover')
+
+  State.set_hovered(win, buf)
+  View.refresh()
+  vim.wait(50)
+
+  local after = vim.wo[win].winbar
+  local after_width
+  for _, item in ipairs(State.layouts[win] or {}) do
+    if item.buf == buf then
+      after_width = item.end_col - item.start_col + 1
+      break
+    end
+  end
+
+  assert(after:find('×', 1, true), 'close button should be visible on hover')
+  assert(after_width == before_width, 'hover close button changed item layout width')
+
+  State.clear_hovered()
+  View.refresh()
+  assert(not vim.wo[win].winbar:find('×', 1, true), 'close button should hide after hover clears')
+end)
+
 test('registers split-local close commands', function()
   assert(vim.fn.exists(':VVBufferlineCloseLeft') == 2, 'VVBufferlineCloseLeft missing')
   assert(vim.fn.exists(':VVBufferlineCloseRight') == 2, 'VVBufferlineCloseRight missing')
@@ -147,6 +190,33 @@ test('close_current closes the split when its local group becomes empty', functi
   assert(not vim.api.nvim_win_is_valid(right), 'empty right split was left in the layout')
   assert(not vim.bo[right_buf].buflisted, 'right buffer is still listed')
   assert(#vim.api.nvim_tabpage_list_wins(0) == 1, 'layout should collapse to one editor split')
+end)
+
+test('winbar close button closes current empty split like close_current', function()
+  setup()
+  vim.cmd('edit /tmp/vv-bufferline-mouse-left.ts')
+  local left = vim.api.nvim_get_current_win()
+  vim.cmd('vsplit')
+  vim.cmd('edit /tmp/vv-bufferline-mouse-right.ts')
+  local right = vim.api.nvim_get_current_win()
+  local right_buf = vim.api.nvim_get_current_buf()
+  vim.wait(80)
+
+  require('vv-bufferline').close_left()
+  vim.wait(80)
+
+  local View = require('vv-bufferline.view')
+  local mouse_interaction_win = View.mouse_interaction_win
+  View.mouse_interaction_win = function() return right end
+  local ok, err = pcall(function() _G.__vv_bufferline_close(right_buf) end)
+  View.mouse_interaction_win = mouse_interaction_win
+  if not ok then error(err) end
+  vim.wait(100)
+
+  assert(vim.api.nvim_win_is_valid(left), 'left split was closed')
+  assert(not vim.api.nvim_win_is_valid(right), 'mouse close left an empty right split in the layout')
+  assert(not vim.bo[right_buf].buflisted, 'right buffer is still listed after mouse close')
+  assert(#vim.api.nvim_tabpage_list_wins(0) == 1, 'mouse close should collapse layout to one editor split')
 end)
 
 test('close_all deletes buffers from all split groups', function()
@@ -372,6 +442,23 @@ test('explicit reopen (select) restores a buffer removed from a split', function
 
   assert(State.has_in_win(top, b), 'select did not restore the removed buffer')
   assert(not State.is_removed(top, b), 'removed flag should be cleared after an explicit reopen')
+end)
+
+test('select ignores winfixbuf windows instead of throwing', function()
+  setup()
+  vim.cmd('edit /tmp/vv-bl-fixed-a.ts')
+  local a = vim.api.nvim_get_current_buf()
+  vim.cmd('edit /tmp/vv-bl-fixed-b.ts')
+  local b = vim.api.nvim_get_current_buf()
+
+  vim.wo.winfixbuf = true
+  local ok, err = pcall(function() require('vv-bufferline').select(a) end)
+  local click_ok, click_err = pcall(function() _G.__vv_bufferline_select(a) end)
+  vim.wo.winfixbuf = false
+
+  assert(ok, 'select raised in a winfixbuf window: ' .. tostring(err))
+  assert(click_ok, 'winbar click select raised in a winfixbuf window: ' .. tostring(click_err))
+  assert(vim.api.nvim_get_current_buf() == b, 'select switched a winfixbuf window')
 end)
 
 test('tabline render target keeps bufferline visible without winbar', function()

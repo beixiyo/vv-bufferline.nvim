@@ -12,14 +12,145 @@ local config = {}
 local previous_tabline
 local previous_showtabline
 local last_editor_win
+local saved_mousemoveevent
+local mousemove_ns
+local hover_scheduled = false
+local hover_clear_token = 0
+local mousemove_key = vim.keycode('<MouseMove>')
 
 local function is_tabline_target()
   return config.render_target == 'tabline'
 end
 
+local function cancel_hover_clear()
+  hover_clear_token = hover_clear_token + 1
+end
+
+local function clear_hover_later()
+  if not State.hover then return end
+
+  hover_clear_token = hover_clear_token + 1
+  local token = hover_clear_token
+  vim.defer_fn(function()
+    if token ~= hover_clear_token then return end
+    if State.clear_hovered() then M.refresh() end
+  end, 80)
+end
+
+local function mouse_winbar_col(pos, win)
+  local infos = vim.fn.getwininfo(win)
+  local info = infos and infos[1]
+  if not info or info.winbar ~= 1 then return nil end
+
+  if pos.screenrow ~= info.winrow then return nil end
+
+  local col = (pos.screencol or 0) - info.wincol + 1
+  if col < 1 or col > info.width then return nil end
+
+  return col
+end
+
+local function mouse_winbar_target(pos)
+  for _, win in ipairs(vim.api.nvim_tabpage_list_wins(0)) do
+    if State.should_show(win) then
+      local col = mouse_winbar_col(pos, win)
+      if col then return win, col end
+    end
+  end
+end
+
+local function mouse_tabline_col(pos)
+  if not is_tabline_target() then return nil end
+  if vim.o.showtabline == 0 then return nil end
+  if pos.screenrow ~= 1 then return nil end
+
+  local col = pos.screencol or 0
+  return col > 0 and col or nil
+end
+
+local function update_hover()
+  hover_scheduled = false
+
+  if not M.enabled or not config.hover_close then
+    if State.clear_hovered() then M.refresh() end
+    return
+  end
+
+  local ok, pos = pcall(vim.fn.getmousepos)
+  if not ok or not pos then return end
+
+  local win
+  local col
+  if is_tabline_target() then
+    win = M.interaction_win()
+    col = mouse_tabline_col(pos)
+  else
+    win, col = mouse_winbar_target(pos)
+  end
+
+  local buf = (win and col) and State.buf_at(win, col) or nil
+  if not buf then
+    clear_hover_later()
+    return
+  end
+
+  cancel_hover_clear()
+  local changed = State.set_hovered(win, buf)
+  if changed then M.refresh() end
+end
+
+local function schedule_hover_update()
+  if hover_scheduled then return end
+
+  hover_scheduled = true
+  vim.schedule(update_hover)
+end
+
+local function enable_hover()
+  if not config.hover_close or mousemove_ns then return end
+
+  saved_mousemoveevent = vim.o.mousemoveevent
+  vim.o.mousemoveevent = true
+
+  mousemove_ns = vim.api.nvim_create_namespace('vv_bufferline_mousemove')
+  vim.on_key(function(key, typed)
+    if key == mousemove_key or typed == mousemove_key then
+      schedule_hover_update()
+    end
+  end, mousemove_ns)
+end
+
+local function disable_hover()
+  if mousemove_ns then
+    pcall(vim.on_key, nil, mousemove_ns)
+    mousemove_ns = nil
+  end
+  hover_scheduled = false
+  State.clear_hovered()
+
+  if saved_mousemoveevent ~= nil then
+    local has_mousemove_map = vim.fn.maparg('<MouseMove>', 'n') ~= ''
+    if saved_mousemoveevent or not has_mousemove_map then
+      vim.o.mousemoveevent = saved_mousemoveevent
+    end
+    saved_mousemoveevent = nil
+  end
+end
+
 ---@param c VVBufferlineConfig
 function M.set_config(c)
   config = c
+end
+
+---@return integer?
+function M.mouse_interaction_win()
+  if is_tabline_target() then return M.interaction_win() end
+
+  local ok, pos = pcall(vim.fn.getmousepos)
+  if not ok or not pos then return nil end
+
+  local win = mouse_winbar_target(pos)
+  return win
 end
 
 ---@param win integer
@@ -102,7 +233,10 @@ end
 
 ---@return integer?
 function M.interaction_win()
-  if not is_tabline_target() then return vim.api.nvim_get_current_win() end
+  if not is_tabline_target() then
+    local cur = vim.api.nvim_get_current_win()
+    return State.should_show(cur) and cur or nil
+  end
 
   local cur = vim.api.nvim_get_current_win()
   if State.should_show(cur) then
@@ -126,6 +260,7 @@ function M.enable()
   if M.enabled then return end
 
   M.enabled = true
+  enable_hover()
   if is_tabline_target() then
     previous_tabline = vim.o.tabline
     previous_showtabline = vim.o.showtabline
@@ -135,6 +270,7 @@ end
 
 function M.disable()
   M.enabled = false
+  disable_hover()
 
   if is_tabline_target() then
     vim.o.tabline = previous_tabline or ''

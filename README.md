@@ -30,7 +30,7 @@ buffer 列表。Neovim 的 buffer 仍是全局的，只有标签 UI 状态按窗
 
 - 普通编辑窗口的按窗口 buffer 标签
 - 点击标签 → 在当前分屏切换该 buffer
-- 点击 `×` → 经 `vv-utils.bufdelete` 关闭
+- hover 标签时显示 `×`，点击 `×` → 经 `vv-utils.bufdelete` 关闭
 - 文件图标与配色经 `vv-icons` / `mini.icons`
 - 已修改标记
 - 诊断徽标经 `vv-utils.diagnostics`
@@ -42,7 +42,8 @@ buffer 列表。Neovim 的 buffer 仍是全局的，只有标签 UI 状态按窗
 ```lua
 require('vv-bufferline').setup({
   max_name_width = 28,            -- 文件名截断前的最大显示宽度
-  show_close = true,              -- 显示可点击的关闭按钮
+  show_close = false,             -- 始终显示关闭按钮
+  hover_close = true,             -- hover 标签时显示关闭按钮，且不额外占用布局宽度
   diagnostics = { enabled = true },
   hide_tabline = true,            -- 隐藏内置 tabline（buffer 已在 winbar 显示）
   render_target = 'winbar',       -- 'winbar' 每窗口显示；'tabline' 全局显示当前组

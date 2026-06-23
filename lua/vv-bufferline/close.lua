@@ -118,6 +118,7 @@ local function close_tab(win, buf, opts)
   opts = opts or {}
   if not vim.api.nvim_win_is_valid(win) then return end
   if not vim.api.nvim_buf_is_valid(buf) then return end
+  if not State.is_editor_win(win) or State.ignored_win(win) then return end
 
   local cur = vim.api.nvim_win_get_buf(win)
   if State.normal_buf(cur) then State.add(win, cur) end
@@ -129,35 +130,48 @@ local function close_tab(win, buf, opts)
   local replacement
   if cur == buf then replacement = replacement_for(win, buf) end
 
-  -- detach（而非 remove_from_win）：记下「本窗口拒绝过 buf」，自动事件不得复原
-  State.detach(win, buf)
-
+  local closed_win = false
   if cur == buf and vim.api.nvim_win_is_valid(win) then
     if replacement then
-      vim.api.nvim_win_set_buf(win, replacement)
-      if State.normal_buf(replacement) then State.add(win, replacement) end
+      local ok = pcall(vim.api.nvim_win_set_buf, win, replacement)
+      if not ok then return end
     elseif not close_empty_win(win) then
-      vim.api.nvim_win_set_buf(win, create_fallback_buf())
+      local fallback = create_fallback_buf()
+      local ok = pcall(vim.api.nvim_win_set_buf, win, fallback)
+      if not ok then
+        pcall(vim.api.nvim_buf_delete, fallback, { force = true })
+        return
+      end
+    else
+      closed_win = true
     end
+  end
+
+  -- detach（而非 remove_from_win）：记下「本窗口拒绝过 buf」，自动事件不得复原
+  if not closed_win and vim.api.nvim_win_is_valid(win) then
+    State.detach(win, buf)
+    if replacement and State.normal_buf(replacement) then State.add(win, replacement) end
   end
 
   delete_global_buf(buf, opts.force)
 end
 
 ---@param buf integer
-function M.close(buf)
+function M.close(buf, opts)
   if not vim.api.nvim_buf_is_valid(buf) then return end
 
-  local win = View.interaction_win()
+  opts = opts or {}
+  local win = opts.mouse and View.mouse_interaction_win() or View.interaction_win()
   if not win or not vim.api.nvim_win_is_valid(win) then return end
 
-  close_tab(win, buf)
+  close_tab(win, buf, opts)
   vim.schedule(View.refresh)
 end
 
 ---@param opts? {force?:boolean}
 function M.close_current(opts)
-  local win = View.interaction_win()
+  opts = opts or {}
+  local win = opts.mouse and View.mouse_interaction_win() or View.interaction_win()
   if not win or not vim.api.nvim_win_is_valid(win) then return end
 
   close_tab(win, vim.api.nvim_win_get_buf(win), opts)
