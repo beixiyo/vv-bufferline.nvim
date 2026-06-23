@@ -34,7 +34,7 @@ function M.component(buf, snapshot, current, opts)
   if not symbol then return nil end
 
   local total = count_total(counts)
-  local text = ' ' .. symbol.glyph .. total
+  local text = ' ' .. symbol.glyph .. ' ' .. total
 
   return {
     text = text,

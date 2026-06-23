@@ -7,17 +7,20 @@ local this = vim.fn.fnamemodify(debug.getinfo(1, 'S').source:sub(2), ':p')
 local plugin_root = vim.fn.fnamemodify(this, ':h:h')
 local vendors_root = vim.fn.fnamemodify(plugin_root, ':h')
 local utils_root = vendors_root .. '/vv-utils.nvim'
+local icons_root = vendors_root .. '/vv-icons.nvim'
 
 package.path = table.concat({
   plugin_root .. '/lua/?.lua',
   plugin_root .. '/lua/?/init.lua',
   utils_root .. '/lua/?.lua',
   utils_root .. '/lua/?/init.lua',
+  icons_root .. '/lua/?.lua',
+  icons_root .. '/lua/?/init.lua',
   package.path,
 }, ';')
 
 vim.api.nvim_set_hl(0, 'MiniIconsBlue', { fg = '#4aa5f0' })
-vim.api.nvim_set_hl(0, 'VVDiagError', { fg = '#f7768e' })
+vim.api.nvim_set_hl(0, 'DiagnosticError', { fg = '#f7768e' })
 package.loaded['nvim-web-devicons'] = {
   get_icon = function()
     return 'T', 'MiniIconsBlue'
@@ -92,8 +95,9 @@ test('renders highest diagnostic severity and count', function()
   })
   vim.wait(100)
 
-  assert(vim.wo.winbar:find('E1', 1, true), 'diagnostic badge missing')
-  assert(vim.wo.winbar:find('VVBufferlineDiagCurrentVVDiagError', 1, true), 'diagnostic highlight missing')
+  local diag_error = require('vv-icons').diagnostics_error
+  assert(vim.wo.winbar:find(diag_error .. ' 1', 1, true), 'diagnostic badge missing')
+  assert(vim.wo.winbar:find('VVBufferlineDiagCurrentDiagnosticError', 1, true), 'diagnostic highlight missing')
 end)
 
 test('shows close button on hover without growing item width', function()
