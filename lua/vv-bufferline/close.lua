@@ -59,7 +59,7 @@ end
 
 ---@param win integer
 ---@param closing_buf integer
----@return integer
+---@return integer?
 local function replacement_for(win, closing_buf)
   local s = State.win_state(win)
   State.prune(win)
@@ -77,7 +77,38 @@ local function replacement_for(win, closing_buf)
     end
   end
 
-  return create_empty_buf()
+  return nil
+end
+
+---@return integer
+local function create_fallback_buf()
+  return create_empty_buf(false)
+end
+
+---@param win integer?
+---@return boolean
+local function can_close_empty_win(win)
+  if not win or not vim.api.nvim_win_is_valid(win) then return false end
+  if not State.is_editor_win(win) then return false end
+
+  local count = 0
+  for _, w in ipairs(vim.api.nvim_tabpage_list_wins(0)) do
+    if State.is_editor_win(w) and not State.ignored_win(w) then
+      count = count + 1
+    end
+  end
+
+  return count > 1
+end
+
+---@param win integer
+---@return boolean closed
+local function close_empty_win(win)
+  if not can_close_empty_win(win) then return false end
+
+  State.remove_win(win)
+  local ok = pcall(vim.api.nvim_win_close, win, true)
+  return ok and not vim.api.nvim_win_is_valid(win)
 end
 
 ---@param win integer
@@ -102,8 +133,12 @@ local function close_tab(win, buf, opts)
   State.detach(win, buf)
 
   if cur == buf and vim.api.nvim_win_is_valid(win) then
-    vim.api.nvim_win_set_buf(win, replacement)
-    if State.normal_buf(replacement) then State.add(win, replacement) end
+    if replacement then
+      vim.api.nvim_win_set_buf(win, replacement)
+      if State.normal_buf(replacement) then State.add(win, replacement) end
+    elseif not close_empty_win(win) then
+      vim.api.nvim_win_set_buf(win, create_fallback_buf())
+    end
   end
 
   delete_global_buf(buf, opts.force)
@@ -113,14 +148,17 @@ end
 function M.close(buf)
   if not vim.api.nvim_buf_is_valid(buf) then return end
 
-  close_tab(vim.api.nvim_get_current_win(), buf)
+  local win = View.interaction_win()
+  if not win or not vim.api.nvim_win_is_valid(win) then return end
+
+  close_tab(win, buf)
   vim.schedule(View.refresh)
 end
 
 ---@param opts? {force?:boolean}
 function M.close_current(opts)
-  local win = vim.api.nvim_get_current_win()
-  if not vim.api.nvim_win_is_valid(win) then return end
+  local win = View.interaction_win()
+  if not win or not vim.api.nvim_win_is_valid(win) then return end
 
   close_tab(win, vim.api.nvim_win_get_buf(win), opts)
   vim.schedule(View.refresh)
@@ -128,8 +166,8 @@ end
 
 ---@param side 'left'|'right'
 local function close_side(side)
-  local win = vim.api.nvim_get_current_win()
-  if not State.normal_win(win) then return end
+  local win = View.interaction_win()
+  if not win or not State.normal_win(win) then return end
 
   local cur = vim.api.nvim_win_get_buf(win)
   State.add(win, cur)
@@ -168,8 +206,8 @@ function M.close_right()
 end
 
 function M.close_others()
-  local win = vim.api.nvim_get_current_win()
-  if not State.normal_win(win) then return end
+  local win = View.interaction_win()
+  if not win or not State.normal_win(win) then return end
 
   local cur = vim.api.nvim_win_get_buf(win)
   State.add(win, cur)

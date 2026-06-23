@@ -9,6 +9,13 @@ local HL = require('vv-bufferline.hl')
 local M = { enabled = false }
 
 local config = {}
+local previous_tabline
+local previous_showtabline
+local last_editor_win
+
+local function is_tabline_target()
+  return config.render_target == 'tabline'
+end
 
 ---@param c VVBufferlineConfig
 function M.set_config(c)
@@ -35,6 +42,23 @@ end
 function M.refresh()
   if not M.enabled then return end
 
+  if is_tabline_target() then
+    local win = M.interaction_win()
+    for _, w in ipairs(vim.api.nvim_tabpage_list_wins(0)) do
+      State.restore_winbar(w)
+      State.clear_orphan_winbar(w)
+    end
+
+    if win and State.should_show(win) then
+      vim.o.showtabline = 2
+      vim.o.tabline = Render.render(win, config)
+    else
+      vim.o.tabline = ''
+      if config.hide_tabline then vim.o.showtabline = 0 end
+    end
+    return
+  end
+
   for _, win in ipairs(vim.api.nvim_tabpage_list_wins(0)) do
     apply_winbar(win)
   end
@@ -49,6 +73,8 @@ function M.restore_all_winbars()
   for _, win in ipairs(wins) do
     State.restore_winbar(win)
   end
+
+  if is_tabline_target() then M.refresh() end
 end
 
 -- 当前窗口落定显示某 buffer 时把它纳入分组；尊重 ignored / preview / removed，不强行复原
@@ -58,6 +84,7 @@ function M.track_current()
   local win = vim.api.nvim_get_current_win()
   if not State.is_editor_win(win) then return end
   if State.ignored_win(win) then return end
+  last_editor_win = win
 
   local buf = vim.api.nvim_get_current_buf()
   if State.is_preview(win, buf) then return end
@@ -73,15 +100,46 @@ function M.reload_hl()
   M.refresh()
 end
 
+---@return integer?
+function M.interaction_win()
+  if not is_tabline_target() then return vim.api.nvim_get_current_win() end
+
+  local cur = vim.api.nvim_get_current_win()
+  if State.should_show(cur) then
+    last_editor_win = cur
+    return cur
+  end
+
+  if last_editor_win and vim.api.nvim_win_is_valid(last_editor_win) and State.should_show(last_editor_win) then
+    return last_editor_win
+  end
+
+  for _, win in ipairs(vim.api.nvim_tabpage_list_wins(0)) do
+    if State.should_show(win) then
+      last_editor_win = win
+      return win
+    end
+  end
+end
+
 function M.enable()
   if M.enabled then return end
 
   M.enabled = true
+  if is_tabline_target() then
+    previous_tabline = vim.o.tabline
+    previous_showtabline = vim.o.showtabline
+  end
   M.reload_hl()
 end
 
 function M.disable()
   M.enabled = false
+
+  if is_tabline_target() then
+    vim.o.tabline = previous_tabline or ''
+    vim.o.showtabline = previous_showtabline or 0
+  end
 
   for win in pairs(State.owned_winbars) do
     State.restore_winbar(win)

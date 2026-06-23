@@ -14,9 +14,11 @@ buffer 列表。Neovim 的 buffer 仍是全局的，只有标签 UI 状态按窗
 - **分屏各管各的（核心诉求）**：标签栏挂在每个窗口的 `winbar` 上，每个 split
   只显示自己打开过的 buffer——和 VSCode 的 editor group 一样。左右分屏打开不同
   文件集时互不串味，而全局 tabline 做不到「这个分屏只看这几个」
-- **winbar 而非 tabline**：标签天然随窗口走、随 `:split` 继承，不抢占全局
+- **winbar 优先**：标签天然随窗口走、随 `:split` 继承，不抢占全局
   `tabline`，也不和别的用 tabline 的东西打架（并默认隐藏内置 tabline，避免多开
   tab 时冒出 `pathshorten` 噪音）
+- **可选全局显示**：如果更喜欢传统的全局 bufferline，可以切到
+  `render_target = 'tabline'`，把当前活动编辑窗口的 buffer 组显示在全局 tabline
 - **与 vv-* 生态深度协作**：`should_show` 让 vv-explorer 预览文件期间标签栏不消失；
   `ignored_win` + tab 约定变量 `vv_bufferline_ignore` 让 vv-git 的自有 tab 整体
   跳过、不被叠标签；诊断、图标统一走 `vv-utils` / `vv-icons`。这些是为这套插件
@@ -43,6 +45,7 @@ require('vv-bufferline').setup({
   show_close = true,              -- 显示可点击的关闭按钮
   diagnostics = { enabled = true },
   hide_tabline = true,            -- 隐藏内置 tabline（buffer 已在 winbar 显示）
+  render_target = 'winbar',       -- 'winbar' 每窗口显示；'tabline' 全局显示当前组
   -- exclude_filetypes = { ... }  -- 不显示标签栏的 filetype
   -- colors = { ... }             -- 可选主题色
 })
@@ -52,8 +55,8 @@ require('vv-bufferline').setup({
 
 | 命令 | 说明 |
 |---|---|
-| `:VVBufferlineEnable` | 启用分屏局部 winbar 标签 |
-| `:VVBufferlineDisable` | 禁用并还原各窗口原 winbar |
+| `:VVBufferlineEnable` | 启用标签栏 |
+| `:VVBufferlineDisable` | 禁用并还原显示承载 |
 | `:VVBufferlineToggle` | 切换 |
 | `:VVBufferlineCloseCurrent` | 关闭当前标签 |
 | `:VVBufferlineCloseCurrentForce` | 强制关闭当前标签（丢弃未保存） |
@@ -65,5 +68,6 @@ require('vv-bufferline').setup({
 ## 设计
 
 本插件刻意**不**替换 Neovim 的 buffer 模型——buffer 仍是全局的。每个窗口只额外
-维护一份「在该窗口访问过的 buffer」的 UI 列表，再渲染进 `vim.wo[win].winbar`
-
+维护一份「在该窗口访问过的 buffer」的 UI 列表。默认渲染进 `vim.wo[win].winbar`，
+让每个 split 同时拥有自己的标签栏；`render_target = 'tabline'` 时则只把当前活动
+编辑窗口的分组渲染到全局 `tabline`，适合偏好单条全局 bufferline 的使用方式

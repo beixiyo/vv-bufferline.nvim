@@ -31,6 +31,7 @@ local M = {}
 ---@field exclude_filetypes table<string, boolean> 不显示 winbar 标签栏的 filetype
 ---@field diagnostics VVBufferlineDiagnosticsConfig 诊断徽标配置 @default { enabled = true }
 ---@field hide_tabline boolean 隐藏 Neovim 内置 tabline（buffer 已在 winbar 显示，内置 tabline 冗余）@default true
+---@field render_target 'winbar'|'tabline' 渲染承载；winbar 每窗口显示，tabline 全局显示当前组 @default 'winbar'
 ---@field colors VVBufferlineColors? 可选的主题色
 
 local defaults = {
@@ -49,6 +50,7 @@ local defaults = {
   },
   diagnostics = { enabled = true },
   hide_tabline = true,
+  render_target = 'winbar',
 }
 
 local config = vim.deepcopy(defaults)
@@ -57,7 +59,7 @@ local config = vim.deepcopy(defaults)
 
 ---@param buf integer
 function M.select(buf)
-  local win = vim.api.nvim_get_current_win()
+  local win = View.interaction_win()
   if not State.normal_buf(buf) or not vim.api.nvim_win_is_valid(win) then return end
 
   State.clear_preview(win)
@@ -128,7 +130,7 @@ function M.setup(opts)
   -- vv-bufferline 用 winbar 展示 buffer，内置 tabline 是冗余噪音：多开一个 tab（如打开 vv-git
   -- 专属 tab）时 Neovim 默认 tabline 会冒出来显示 pathshorten 的标签栏。这里默认隐藏它，
   -- 接管原 akinsho/bufferline（它当年 set showtabline=2 自管 tabline）留下的这块空缺。
-  if config.hide_tabline then vim.o.showtabline = 0 end
+  if config.hide_tabline and config.render_target ~= 'tabline' then vim.o.showtabline = 0 end
 
   _G.__vv_bufferline_select = function(buf) M.select(buf) end
   _G.__vv_bufferline_close = function(buf) M.close(buf) end

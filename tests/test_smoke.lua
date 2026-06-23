@@ -38,10 +38,11 @@ local function test(name, fn)
   end
 end
 
-local function setup()
+local function setup(extra)
   pcall(vim.cmd, 'silent! only')
+  pcall(function() require('vv-bufferline').disable() end)
   require('vv-bufferline.state').reset()
-  require('vv-bufferline').setup({
+  local opts = {
     colors = {
       fill_bg = '#111111',
       inactive_bg = '#222222',
@@ -51,7 +52,8 @@ local function setup()
       muted_fg = '#777777',
       modified_fg = '#ffaa00',
     },
-  })
+  }
+  require('vv-bufferline').setup(vim.tbl_deep_extend('force', opts, extra or {}))
 end
 
 test('renders one tab per split-local current buffer', function()
@@ -101,7 +103,7 @@ test('registers split-local close commands', function()
   assert(vim.fn.exists(':VVBufferlineCloseAll') == 2, 'VVBufferlineCloseAll missing')
 end)
 
-test('close_current keeps sibling split that shares the same buffer', function()
+test('close_current closes an empty split while keeping sibling that shares the buffer', function()
   setup()
   vim.cmd('edit /tmp/vv-bufferline-shared.ts')
   local shared = vim.api.nvim_get_current_buf()
@@ -119,10 +121,32 @@ test('close_current keeps sibling split that shares the same buffer', function()
   require('vv-bufferline').close_current()
   vim.wait(100)
 
-  assert(#vim.api.nvim_tabpage_list_wins(0) == before_count, 'close_current closed a split window')
+  assert(#vim.api.nvim_tabpage_list_wins(0) == before_count - 1, 'close_current did not close the emptied split')
   assert(vim.api.nvim_win_is_valid(sibling_win), 'sibling split was invalidated')
   assert(vim.api.nvim_win_get_buf(sibling_win) == shared, 'sibling split stopped showing shared buffer')
-  assert(vim.api.nvim_win_get_buf(close_win) ~= shared, 'closed split did not switch away from shared buffer')
+  assert(not vim.api.nvim_win_is_valid(close_win), 'emptied split was left in the layout')
+  assert(vim.bo[shared].buflisted, 'shared buffer was deleted even though a sibling still owns it')
+end)
+
+test('close_current closes the split when its local group becomes empty', function()
+  setup()
+  vim.cmd('edit /tmp/vv-bufferline-layout-left.ts')
+  local left = vim.api.nvim_get_current_win()
+  vim.cmd('vsplit')
+  vim.cmd('edit /tmp/vv-bufferline-layout-right.ts')
+  local right = vim.api.nvim_get_current_win()
+  local right_buf = vim.api.nvim_get_current_buf()
+  vim.wait(80)
+
+  require('vv-bufferline').close_left()
+  vim.wait(80)
+  require('vv-bufferline').close_current()
+  vim.wait(100)
+
+  assert(vim.api.nvim_win_is_valid(left), 'left split was closed')
+  assert(not vim.api.nvim_win_is_valid(right), 'empty right split was left in the layout')
+  assert(not vim.bo[right_buf].buflisted, 'right buffer is still listed')
+  assert(#vim.api.nvim_tabpage_list_wins(0) == 1, 'layout should collapse to one editor split')
 end)
 
 test('close_all deletes buffers from all split groups', function()
@@ -348,6 +372,20 @@ test('explicit reopen (select) restores a buffer removed from a split', function
 
   assert(State.has_in_win(top, b), 'select did not restore the removed buffer')
   assert(not State.is_removed(top, b), 'removed flag should be cleared after an explicit reopen')
+end)
+
+test('tabline render target keeps bufferline visible without winbar', function()
+  setup({ render_target = 'tabline' })
+  vim.cmd('edit /tmp/vv-bl-tabline-a.ts')
+  vim.wait(100)
+
+  assert(vim.o.showtabline == 2, 'tabline render target should force tabline visible')
+  assert(vim.wo.winbar == '', 'tabline render target must not write winbar')
+  assert(vim.o.tabline:find('vv-bl-tabline-a.ts', 1, true), 'tabline does not contain current buffer')
+  assert(vim.fn.exists(':VVBufferlineCloseLeft') == 2, 'close-left command missing in tabline mode')
+
+  require('vv-bufferline').disable()
+  assert(vim.o.tabline == '', 'disable should restore tabline value')
 end)
 
 print(string.format('vv-bufferline smoke: %d passed, %d failed', passed, failed))
