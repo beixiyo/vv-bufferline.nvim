@@ -1,43 +1,67 @@
+<div align="center">
+
 # vv-bufferline.nvim
 
-类 VSCode 的**分屏局部** buffer 标签栏
+English | [中文](./README.zh-CN.md)
 
-`vv-bufferline` 通过 window-local 的 `winbar`，让**每个窗口**渲染自己访问过的
-buffer 列表。Neovim 的 buffer 仍是全局的，只有标签 UI 状态按窗口隔离
+<img src="./docs/assets/vv-bufferline.png" alt="vv-bufferline demo" width="900" />
 
-## 为什么自研，而不用现成的 bufferline
+Want my Neovim config? See <a href="https://github.com/beixiyo/dotfiles">dotfiles</a>
 
-主流 bufferline（`akinsho/bufferline.nvim`、`nvim-cokeline` 等）本质是一条
-**全局 tabline**：所有窗口共享同一条「列出所有 buffer」的标签栏。这套自研插件
-要解决的是它们在设计上做不到、或要 hack 才能凑出来的几件事：
+A VSCode-like **split-local** buffer tabline
 
-- **分屏各管各的（核心诉求）**：标签栏挂在每个窗口的 `winbar` 上，每个 split
-  只显示自己打开过的 buffer——和 VSCode 的 editor group 一样。左右分屏打开不同
-  文件集时互不串味，而全局 tabline 做不到「这个分屏只看这几个」
-- **winbar 优先**：标签天然随窗口走、随 `:split` 继承，不抢占全局
-  `tabline`，也不和别的用 tabline 的东西打架（并默认隐藏内置 tabline，避免多开
-  tab 时冒出 `pathshorten` 噪音）
-- **可选全局显示**：如果更喜欢传统的全局 bufferline，可以切到
-  `render_target = 'tabline'`，把当前活动编辑窗口的 buffer 组显示在全局 tabline
-- **与 vv-* 生态深度协作**：`should_show` 让 vv-explorer 预览文件期间标签栏不消失；
-  `ignored_win` + tab 约定变量 `vv_bufferline_ignore` 让 vv-git 的自有 tab 整体
-  跳过、不被叠标签；诊断、图标统一走 `vv-utils` / `vv-icons`。这些是为这套插件
-  量身定制的协作点，第三方插件要么做不到，要么得靠 monkey-patch 硬凑
-- **轻**：不接管 Neovim 的 buffer 模型（buffer 仍全局），只维护一层窗口级 UI
-  状态；无多余依赖
+<img src="https://img.shields.io/badge/Neovim-0.10%2B-57A143?logo=neovim&logoColor=white" alt="Neovim" />
+<img src="https://img.shields.io/badge/Lua-2C2D72?logo=lua&logoColor=white" alt="Lua" />
 
-## 特性
+</div>
 
-- 普通编辑窗口的按窗口 buffer 标签
-- 点击标签 → 在当前分屏切换该 buffer
-- hover 标签时显示 `×`，点击 `×` → 经 `vv-utils.bufdelete` 关闭
-- 文件图标与配色经 `vv-icons` / `mini.icons`
-- 已修改标记
-- 诊断徽标经 `vv-utils.diagnostics`
-- 自动过滤特殊窗口：help、quickfix、终端、`vv-explorer`、`vv-git`、diff 窗
-- 窄窗口标签截断
+`vv-bufferline` uses the window-local `winbar` so that **every window** renders
+its own list of visited buffers. Neovim's buffers are still global — only the
+tab UI state is isolated per window
 
-## 安装配置
+## Why build this instead of using an existing bufferline
+
+Mainstream bufferlines (`akinsho/bufferline.nvim`, `nvim-cokeline`, etc.) are
+essentially a single **global tabline**: every window shares one tabline that
+"lists all buffers". This plugin exists to solve the things they cannot do by
+design, or can only fake with hacks:
+
+- **Every split minds its own business (the core requirement)**: the tabline is
+  attached to each window's `winbar`, so each split only shows the buffers it
+  has opened — exactly like VSCode's editor groups. When the left and right
+  splits open different sets of files, they never bleed into each other, whereas
+  a global tabline cannot express "this split only shows these few"
+- **winbar first**: tabs naturally follow the window and are inherited by
+  `:split`; they do not take over the global `tabline`, and do not fight with
+  anything else that uses the tabline (the built-in tabline is hidden by
+  default, so opening multiple tabs does not produce `pathshorten` noise)
+- **Optional global display**: if you prefer the traditional global bufferline,
+  switch to `render_target = 'tabline'` to render the buffer group of the
+  currently active editor window into the global tabline
+- **Deep collaboration with the vv-* ecosystem**: `should_show` keeps the
+  tabline from disappearing while vv-explorer is previewing a file;
+  `ignored_win` plus the tab-scoped convention variable `vv_bufferline_ignore`
+  lets vv-git's own tab be skipped entirely so no tabs are stacked onto it;
+  diagnostics and icons go uniformly through `vv-utils` / `vv-icons`. These are
+  collaboration points tailor-made for this plugin — third-party plugins either
+  cannot do them, or have to force it with monkey-patching
+- **Lightweight**: it does not take over Neovim's buffer model (buffers stay
+  global), it only maintains a layer of window-level UI state; no extra
+  dependencies
+
+## Features
+
+- Per-window buffer tabs for normal editor windows
+- Click a tab → switch to that buffer in the current split
+- Hovering a tab shows `×`; clicking `×` → closes via `vv-utils.bufdelete`
+- File icons and colors via `vv-icons` / `mini.icons`
+- Modified indicator
+- Diagnostic badges via `vv-utils.diagnostics`
+- Automatically filters special windows: help, quickfix, terminal,
+  `vv-explorer`, `vv-git`, diff windows
+- Tab truncation in narrow windows
+
+## Installation and configuration
 
 ```lua
 require('vv-bufferline').setup({
@@ -52,23 +76,44 @@ require('vv-bufferline').setup({
 })
 ```
 
-## 命令
+Option meanings:
 
-| 命令 | 说明 |
+- `max_name_width`: max display width of a file name before it is truncated
+- `show_close`: always show the close button
+- `hover_close`: show the close button when hovering a tab, without taking up
+  extra layout width
+- `diagnostics`: diagnostic badges
+- `hide_tabline`: hide the built-in tabline (buffers are already shown in the
+  winbar)
+- `render_target`: `'winbar'` renders per window; `'tabline'` renders the
+  current group globally
+- `exclude_filetypes`: filetypes for which the tabline is not shown
+- `colors`: optional theme colors
+
+## Commands
+
+| Command | Description |
 |---|---|
-| `:VVBufferlineEnable` | 启用标签栏 |
-| `:VVBufferlineDisable` | 禁用并还原显示承载 |
-| `:VVBufferlineToggle` | 切换 |
-| `:VVBufferlineCloseCurrent` | 关闭当前标签 |
-| `:VVBufferlineCloseCurrentForce` | 强制关闭当前标签（丢弃未保存） |
-| `:VVBufferlineCloseLeft` | 关闭当前标签左侧的 buffer |
-| `:VVBufferlineCloseRight` | 关闭当前标签右侧的 buffer |
-| `:VVBufferlineCloseOthers` | 关闭当前标签以外的 buffer |
-| `:VVBufferlineCloseAll` | 关闭全部 buffer |
+| `:VVBufferlineEnable` | Enable the tabline |
+| `:VVBufferlineDisable` | Disable it and restore the display host |
+| `:VVBufferlineToggle` | Toggle |
+| `:VVBufferlineCloseCurrent` | Close the current tab |
+| `:VVBufferlineCloseCurrentForce` | Force-close the current tab (discard unsaved changes) |
+| `:VVBufferlineCloseLeft` | Close the buffers to the left of the current tab |
+| `:VVBufferlineCloseRight` | Close the buffers to the right of the current tab |
+| `:VVBufferlineCloseOthers` | Close all buffers except the current tab |
+| `:VVBufferlineCloseAll` | Close all buffers |
 
-## 设计
+## Design
 
-本插件刻意**不**替换 Neovim 的 buffer 模型——buffer 仍是全局的。每个窗口只额外
-维护一份「在该窗口访问过的 buffer」的 UI 列表。默认渲染进 `vim.wo[win].winbar`，
-让每个 split 同时拥有自己的标签栏；`render_target = 'tabline'` 时则只把当前活动
-编辑窗口的分组渲染到全局 `tabline`，适合偏好单条全局 bufferline 的使用方式
+This plugin deliberately does **not** replace Neovim's buffer model — buffers
+remain global. Each window merely maintains one extra UI list of "buffers
+visited in this window". By default it renders into `vim.wo[win].winbar`, so
+every split gets its own tabline at the same time; with
+`render_target = 'tabline'` only the group of the currently active editor window
+is rendered into the global `tabline`, which suits people who prefer a single
+global bufferline
+
+## License
+
+[MIT](./LICENSE)
