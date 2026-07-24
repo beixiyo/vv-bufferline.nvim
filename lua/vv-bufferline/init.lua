@@ -74,6 +74,33 @@ function M.select(buf, opts)
   View.refresh()
 end
 
+---按当前窗口的标签顺序循环切换 buffer
+---@param delta integer 正数向右，负数向左
+function M.cycle(delta)
+  if delta == 0 then return end
+
+  local win = View.interaction_win()
+  if not win or not vim.api.nvim_win_is_valid(win) then return end
+
+  State.prune(win)
+  local bufs = State.win_state(win).bufs
+  if #bufs == 0 then return end
+
+  local current = vim.api.nvim_win_get_buf(win)
+  local index = State.index_of(win, current)
+  local target_index
+
+  if index then
+    target_index = (index - 1 + delta) % #bufs + 1
+  elseif delta > 0 then
+    target_index = (delta - 1) % #bufs + 1
+  else
+    target_index = delta % #bufs + 1
+  end
+
+  M.select(bufs[target_index])
+end
+
 ---@param win integer
 ---@param buf integer
 ---@return boolean

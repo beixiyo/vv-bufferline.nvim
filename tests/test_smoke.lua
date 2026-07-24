@@ -275,6 +275,48 @@ test('tracks rapid edit sequence before scheduled redraw', function()
   assert(seen['vv-bufferline-c.ts'], 'right rapid edit buffer missing')
 end)
 
+test('cycles only through the current split group', function()
+  setup()
+  local State = require('vv-bufferline.state')
+
+  vim.cmd('edit /tmp/vv-bl-cycle-a.ts')
+  local a = vim.api.nvim_get_current_buf()
+  vim.cmd('edit /tmp/vv-bl-cycle-b.ts')
+  local b = vim.api.nvim_get_current_buf()
+  vim.cmd('split')
+  local current = vim.api.nvim_get_current_win()
+  local other
+
+  for _, win in ipairs(vim.api.nvim_tabpage_list_wins(0)) do
+    if win ~= current then
+      other = win
+      break
+    end
+  end
+
+  vim.api.nvim_win_set_buf(current, a)
+  State.wins[current] = { bufs = { a } }
+  State.wins[other] = { bufs = { b } }
+  State.removed[current] = { [b] = true }
+
+  assert(not State.has_in_win(current, b), 'precondition: b should not belong to the current split')
+  assert(vim.bo[b].buflisted, 'precondition: b should remain globally listed in the other split')
+
+  require('vv-bufferline').cycle(1)
+  assert(
+    vim.api.nvim_win_get_buf(current) == a,
+    ('cycle selected buffer %d instead of current-group buffer %d'):format(vim.api.nvim_win_get_buf(current), a)
+  )
+
+  vim.cmd('edit /tmp/vv-bl-cycle-c.ts')
+  local c = vim.api.nvim_get_current_buf()
+  require('vv-bufferline').cycle(-1)
+  assert(vim.api.nvim_win_get_buf(current) == a, 'backward cycle did not follow the current split order')
+
+  require('vv-bufferline').cycle(3)
+  assert(vim.api.nvim_win_get_buf(current) == c, 'cycle count did not wrap within the current split')
+end)
+
 test('keeps the bufferline visible while previewing a new file (and does not pollute the group)', function()
   setup()
   vim.cmd('edit /tmp/vv-bl-pv-a.ts')
