@@ -4,7 +4,7 @@
 
 [English](./README.md) | 中文
 
-<img src="./docs/assets/vv-bufferline.png" alt="vv-bufferline 演示" width="900" />
+<img src="https://github.com/beixiyo/vv-bufferline.nvim/releases/download/assets-2026-07-25/vv-bufferline.png" alt="vv-bufferline 演示" width="900" />
 
 想要我的 Neovim 配置？查看 <a href="https://github.com/beixiyo/dotfiles">dotfiles</a>
 
