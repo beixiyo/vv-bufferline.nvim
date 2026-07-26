@@ -415,6 +415,34 @@ test('disable() does not write back a bufferline winbar inherited via split', fu
     'disable() wrote a stale bufferline winbar back into the split window')
 end)
 
+test('disable() restores pre-existing v:lua click callbacks', function()
+  require('vv-bufferline').disable()
+  local old_select = function() return 'old select' end
+  local old_close = function() return 'old close' end
+  _G.__vv_bufferline_select = old_select
+  _G.__vv_bufferline_close = old_close
+
+  setup()
+  assert(_G.__vv_bufferline_select ~= old_select, 'setup did not install select bridge')
+  require('vv-bufferline').disable()
+  assert(_G.__vv_bufferline_select == old_select, 'select bridge was not restored')
+  assert(_G.__vv_bufferline_close == old_close, 'close bridge was not restored')
+end)
+
+test('disable() keeps v:lua click callbacks replaced after bufferline setup', function()
+  require('vv-bufferline').disable()
+  setup()
+
+  local external_select = function() return 'external select' end
+  local external_close = function() return 'external close' end
+  _G.__vv_bufferline_select = external_select
+  _G.__vv_bufferline_close = external_close
+
+  require('vv-bufferline').disable()
+  assert(_G.__vv_bufferline_select == external_select, 'disable overwrote an external select bridge')
+  assert(_G.__vv_bufferline_close == external_close, 'disable overwrote an external close bridge')
+end)
+
 -- 构造「b 已从 top 分组删除、但仍存活（bottom 分屏持有）」的状态
 local function split_with_removed_buffer()
   setup()

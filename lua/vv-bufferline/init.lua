@@ -10,6 +10,7 @@
 local State = require('vv-bufferline.state')
 local View = require('vv-bufferline.view')
 local Close = require('vv-bufferline.close')
+local Click = require('vv-bufferline.click')
 
 local M = {}
 
@@ -137,11 +138,14 @@ end
 -- ===== 重导出 view / close 的公开 API =====
 
 M.enable = View.enable
-M.disable = View.disable
+function M.disable()
+  View.disable()
+  Click.restore()
+end
 
 function M.toggle()
   if View.enabled then
-    View.disable()
+    M.disable()
   else
     View.enable()
   end
@@ -168,8 +172,8 @@ function M.setup(opts)
   -- 接管原 akinsho/bufferline（它当年 set showtabline=2 自管 tabline）留下的这块空缺。
   if config.hide_tabline and config.render_target ~= 'tabline' then vim.o.showtabline = 0 end
 
-  _G.__vv_bufferline_select = function(buf) M.select(buf, { mouse = true }) end
-  _G.__vv_bufferline_close = function(buf)
+  -- Neovim resolves winbar click handlers through these v:lua names.
+  Click.install(function(buf) M.select(buf, { mouse = true }) end, function(buf)
     local win = View.mouse_interaction_win()
     if win and vim.api.nvim_win_is_valid(win) and vim.api.nvim_win_get_buf(win) == buf then
       M.close_current({ mouse = true })
@@ -177,7 +181,7 @@ function M.setup(opts)
     end
 
     M.close(buf, { mouse = true })
-  end
+  end)
 
   local group = vim.api.nvim_create_augroup('vv_bufferline', { clear = true })
 
