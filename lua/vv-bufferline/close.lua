@@ -3,6 +3,8 @@
 -- removed（自动事件不复原）。状态改动后通过 View.refresh 重绘
 
 local State = require('vv-bufferline.state')
+local Window = require('vv-bufferline.window')
+local WinbarHost = require('vv-bufferline.winbar_host')
 local View = require('vv-bufferline.view')
 
 local M = {}
@@ -68,12 +70,12 @@ local function replacement_for(win, closing_buf)
   if idx then
     for i = idx - 1, 1, -1 do
       local buf = s.bufs[i]
-      if buf ~= closing_buf and State.normal_buf(buf) then return buf end
+      if buf ~= closing_buf and Window.normal_buf(buf) then return buf end
     end
 
     for i = idx + 1, #s.bufs do
       local buf = s.bufs[i]
-      if buf ~= closing_buf and State.normal_buf(buf) then return buf end
+      if buf ~= closing_buf and Window.normal_buf(buf) then return buf end
     end
   end
 
@@ -89,11 +91,11 @@ end
 ---@return boolean
 local function can_close_empty_win(win)
   if not win or not vim.api.nvim_win_is_valid(win) then return false end
-  if not State.is_editor_win(win) then return false end
+  if not Window.is_editor_win(win) then return false end
 
   local count = 0
   for _, w in ipairs(vim.api.nvim_tabpage_list_wins(0)) do
-    if State.is_editor_win(w) and not State.ignored_win(w) then
+    if Window.is_editor_win(w) and not Window.ignored_win(w) then
       count = count + 1
     end
   end
@@ -107,6 +109,7 @@ local function close_empty_win(win)
   if not can_close_empty_win(win) then return false end
 
   State.remove_win(win)
+  WinbarHost.remove(win)
   local ok = pcall(vim.api.nvim_win_close, win, true)
   return ok and not vim.api.nvim_win_is_valid(win)
 end
@@ -118,10 +121,10 @@ local function close_tab(win, buf, opts)
   opts = opts or {}
   if not vim.api.nvim_win_is_valid(win) then return end
   if not vim.api.nvim_buf_is_valid(buf) then return end
-  if not State.is_editor_win(win) or State.ignored_win(win) then return end
+  if not Window.is_editor_win(win) or Window.ignored_win(win) then return end
 
   local cur = vim.api.nvim_win_get_buf(win)
-  if State.normal_buf(cur) then State.add(win, cur) end
+  if Window.normal_buf(cur) then State.add(win, cur) end
   State.prune(win)
 
   local should_delete = not has_external_ref(buf, win)
@@ -150,7 +153,7 @@ local function close_tab(win, buf, opts)
   -- detach（而非 remove_from_win）：记下「本窗口拒绝过 buf」，自动事件不得复原
   if not closed_win and vim.api.nvim_win_is_valid(win) then
     State.detach(win, buf)
-    if replacement and State.normal_buf(replacement) then State.add(win, replacement) end
+    if replacement and Window.normal_buf(replacement) then State.add(win, replacement) end
   end
 
   delete_global_buf(buf, opts.force)
@@ -181,7 +184,7 @@ end
 ---@param side 'left'|'right'
 local function close_side(side)
   local win = View.interaction_win()
-  if not win or not State.normal_win(win) then return end
+  if not win or not Window.normal_win(win) then return end
 
   local cur = vim.api.nvim_win_get_buf(win)
   State.add(win, cur)
@@ -221,7 +224,7 @@ end
 
 function M.close_others()
   local win = View.interaction_win()
-  if not win or not State.normal_win(win) then return end
+  if not win or not Window.normal_win(win) then return end
 
   local cur = vim.api.nvim_win_get_buf(win)
   State.add(win, cur)
@@ -250,7 +253,7 @@ function M.close_all(opts)
   end
 
   for _, buf in ipairs(vim.api.nvim_list_bufs()) do
-    if not seen[buf] and State.normal_buf(buf) then
+    if not seen[buf] and Window.normal_buf(buf) then
       seen[buf] = true
       table.insert(targets, buf)
     end
@@ -261,7 +264,7 @@ function M.close_all(opts)
   end
 
   for _, win in ipairs(vim.api.nvim_tabpage_list_wins(0)) do
-    if State.is_editor_win(win) then
+    if Window.is_editor_win(win) then
       local buf = vim.api.nvim_win_get_buf(win)
       if seen[buf] then vim.api.nvim_win_set_buf(win, create_empty_buf(false)) end
     end

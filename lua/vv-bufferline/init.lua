@@ -8,34 +8,16 @@
 -- close（关闭/删除编排）
 
 local State = require('vv-bufferline.state')
+local Window = require('vv-bufferline.window')
+local WinbarHost = require('vv-bufferline.winbar_host')
 local View = require('vv-bufferline.view')
 local Close = require('vv-bufferline.close')
 local Click = require('vv-bufferline.click')
+require('vv-bufferline.types')
 
 local M = {}
 
----@class VVBufferlineDiagnosticsConfig
----@field enabled boolean 显示最高严重级别与诊断总数 @default true
-
----@class VVBufferlineColors
----@field fill_bg string? 空 winbar 的背景色
----@field inactive_bg string? 非当前标签的背景色
----@field active_bg string? 当前标签的背景色
----@field inactive_fg string? 非当前标签的前景色
----@field active_fg string? 当前标签的前景色
----@field muted_fg string? 关闭按钮/截断符的前景色
----@field modified_fg string? 已修改标记的前景色
-
----@class VVBufferlineConfig
----@field max_name_width integer 文件名截断前的最大显示宽度 @default 28
----@field show_close boolean 是否始终显示可点击的关闭按钮 @default false
----@field hover_close boolean 是否在鼠标悬停标签时显示关闭按钮 @default true
----@field exclude_filetypes table<string, boolean> 不显示 winbar 标签栏的 filetype
----@field diagnostics VVBufferlineDiagnosticsConfig 诊断徽标配置 @default { enabled = true }
----@field hide_tabline boolean 隐藏 Neovim 内置 tabline（buffer 已在 winbar 显示，内置 tabline 冗余）@default true
----@field render_target 'winbar'|'tabline' 渲染承载；winbar 每窗口显示，tabline 全局显示当前组 @default 'winbar'
----@field colors VVBufferlineColors? 可选的主题色
-
+---@type VVBufferlineConfig
 local defaults = {
   max_name_width = 28,
   show_close = false,
@@ -56,6 +38,7 @@ local defaults = {
   render_target = 'winbar',
 }
 
+---@type VVBufferlineConfig
 local config = vim.deepcopy(defaults)
 
 -- ===== 公开交互 API（触碰 state 并重绘，薄封装放在入口）=====
@@ -64,8 +47,8 @@ local config = vim.deepcopy(defaults)
 ---@param opts? {mouse?:boolean}
 function M.select(buf, opts)
   local win = opts and opts.mouse and View.mouse_interaction_win() or View.interaction_win()
-  if not win or not State.normal_buf(buf) or not vim.api.nvim_win_is_valid(win) then return end
-  if not State.is_editor_win(win) or State.ignored_win(win) then return end
+  if not win or not Window.normal_buf(buf) or not vim.api.nvim_win_is_valid(win) then return end
+  if not Window.is_editor_win(win) or Window.ignored_win(win) then return end
 
   State.clear_preview(win)
   local ok = pcall(vim.api.nvim_win_set_buf, win, buf)
@@ -129,7 +112,7 @@ function M.clear_preview(win, buf, opts)
   State.clear_preview(win, buf)
   if opts.promote then
     local target = buf or vim.api.nvim_win_get_buf(win)
-    if State.normal_buf(target) then State.add(win, target) end
+    if Window.normal_buf(target) then State.add(win, target) end
   end
 
   View.refresh()
@@ -215,7 +198,10 @@ function M.setup(opts)
     group = group,
     callback = function(args)
       local win = tonumber(args.match)
-      if win then State.remove_win(win) end
+      if win then
+        State.remove_win(win)
+        WinbarHost.remove(win)
+      end
     end,
   })
 

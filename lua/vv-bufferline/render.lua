@@ -1,6 +1,8 @@
 -- 把窗口局部的 buffer 标签渲染成 winbar statusline 字符串
 
 local State = require('vv-bufferline.state')
+local Window = require('vv-bufferline.window')
+local WinbarHost = require('vv-bufferline.winbar_host')
 local Icons = require('vv-bufferline.icons')
 local Diagnostics = require('vv-bufferline.diagnostics')
 
@@ -137,7 +139,7 @@ end
 ---@param win integer
 ---@param config VVBufferlineConfig
 function M.render(win, config)
-  if not State.should_show(win) then
+  if not Window.should_show(win) then
     State.clear_layout(win)
     return ''
   end
@@ -166,8 +168,7 @@ function M.render(win, config)
 
   local max_width = math.max(8, vim.api.nvim_win_get_width(win) - 1)
   local visible = visible_items(items, max_width)
-  -- 外框用 WINBAR_MARKER 前缀：它必然出现在每次渲染里，state 的 orphan/继承识别即据此 sniff
-  local parts = { '%#' .. State.WINBAR_MARKER .. 'Fill#' }
+  local parts = { '%#' .. WinbarHost.marker .. 'Fill#' }
 
   if visible.leading_trunc then
     table.insert(parts, '%#VVBufferlineTrunc# … ')
@@ -190,7 +191,7 @@ function M.render(win, config)
     table.insert(parts, '%#VVBufferlineTrunc# … ')
   end
 
-  table.insert(parts, '%#' .. State.WINBAR_MARKER .. 'Fill#%=')
+  table.insert(parts, '%#' .. WinbarHost.marker .. 'Fill#%=')
 
   return table.concat(parts)
 end

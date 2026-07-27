@@ -45,6 +45,7 @@ local function setup(extra)
   pcall(vim.cmd, 'silent! only')
   pcall(function() require('vv-bufferline').disable() end)
   require('vv-bufferline.state').reset()
+  require('vv-bufferline.winbar_host').reset()
   local opts = {
     colors = {
       fill_bg = '#111111',
@@ -346,21 +347,21 @@ test('ignores diff windows + vv-git tab, and clears the winbar inherited via tab
   vim.cmd('edit /tmp/vv-bl-ign-a.ts')
   local win = vim.api.nvim_get_current_win()
   vim.wait(50)
-  local State = require('vv-bufferline.state')
+  local Window = require('vv-bufferline.window')
   assert(vim.wo[win].winbar ~= '', 'precondition: normal editor window shows bufferline')
 
   -- diff 模式窗口被忽略（vv-git 的 diff 视图就是这种窗口）
   vim.wo[win].diff = true
-  assert(State.ignored_win(win) and not State.should_show(win), 'diff window must be ignored')
+  assert(Window.ignored_win(win) and not Window.should_show(win), 'diff window must be ignored')
   vim.wo[win].diff = false
-  assert(State.should_show(win), 'window renders again once diff is off')
+  assert(Window.should_show(win), 'window renders again once diff is off')
 
   -- 模拟 vv-git：tab split（新窗口会「继承」源窗口的 bufferline winbar）+ 同步标记 ignore
   vim.cmd('tab split')
   local gwin = vim.api.nvim_get_current_win()
   assert(vim.wo[gwin].winbar:find('VVBufferline', 1, true), 'precondition: tab split inherited the bufferline winbar')
   vim.api.nvim_tabpage_set_var(vim.api.nvim_get_current_tabpage(), 'vv_bufferline_ignore', true)
-  assert(State.ignored_win(gwin), 'window in an ignored tab must be ignored')
+  assert(Window.ignored_win(gwin), 'window in an ignored tab must be ignored')
 
   -- 一次刷新后，继承来的 bufferline 残留应被清掉
   vim.api.nvim_exec_autocmds('WinResized', {})
@@ -373,6 +374,7 @@ end)
 test('should_show in preview state counts only valid members (no empty winbar)', function()
   setup()
   local State = require('vv-bufferline.state')
+  local Window = require('vv-bufferline.window')
   local win = vim.api.nvim_get_current_win()
 
   local stale = vim.fn.bufadd('/tmp/vv-bl-pe-stale.ts') -- 未 load/未 list → normal_buf=false
@@ -385,28 +387,28 @@ test('should_show in preview state counts only valid members (no empty winbar)',
   State.set_preview(win, pv)
   vim.api.nvim_win_set_buf(win, pv)
   State.wins[win] = { bufs = { stale } }
-  assert(not State.should_show(win), 'preview window whose only member is invalid must not should_show')
+  assert(not Window.should_show(win), 'preview window whose only member is invalid must not should_show')
 
   -- 对照：补一个有效成员 → 预览态应保留既有标签栏
   local valid = vim.fn.bufadd('/tmp/vv-bl-pe-valid.ts')
   vim.fn.bufload(valid)
   vim.bo[valid].buflisted = true
   State.wins[win].bufs = { stale, valid }
-  assert(State.should_show(win), 'preview window with a valid member should should_show')
+  assert(Window.should_show(win), 'preview window with a valid member should should_show')
 end)
 
 test('disable() does not write back a bufferline winbar inherited via split', function()
   setup()
   vim.cmd('edit /tmp/vv-bl-rem-a.ts')
   vim.wait(50)
-  local State = require('vv-bufferline.state')
+  local WinbarHost = require('vv-bufferline.winbar_host')
 
   vim.cmd('vsplit') -- 新窗口继承源窗口的 bufferline winbar 串
   local nw = vim.api.nvim_get_current_win()
   vim.wait(50)
 
   -- remember_winbar 不应把「继承来的我方串」存为 previous
-  assert(not (State.previous_winbars[nw] or ''):find('VVBufferline', 1, true),
+  assert(not (WinbarHost.previous[nw] or ''):find('VVBufferline', 1, true),
     'remember_winbar stored an inherited bufferline string as the previous value')
 
   require('vv-bufferline').disable()

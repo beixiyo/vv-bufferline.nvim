@@ -1,0 +1,21 @@
+---@class VVBufferlineDiagnosticsConfig
+---@field enabled boolean 显示最高严重级别与诊断总数 @default true
+
+---@class VVBufferlineColors
+---@field fill_bg string? 空 winbar 的背景色
+---@field inactive_bg string? 非当前标签的背景色
+---@field active_bg string? 当前标签的背景色
+---@field inactive_fg string? 非当前标签的前景色
+---@field active_fg string? 当前标签的前景色
+---@field muted_fg string? 关闭按钮/截断符的前景色
+---@field modified_fg string? 已修改标记的前景色
+
+---@class VVBufferlineConfig
+---@field max_name_width integer 文件名截断前的最大显示宽度 @default 28
+---@field show_close boolean 是否始终显示可点击的关闭按钮 @default false
+---@field hover_close boolean 是否在鼠标悬停标签时显示关闭按钮 @default true
+---@field exclude_filetypes table<string, boolean> 不显示 winbar 标签栏的 filetype @default { alpha = true, dashboard = true, fzf = true, help = true, ministarter = true, qf = true, trouble = true, ['vv-explorer'] = true, ['vv-git'] = true }
+---@field diagnostics VVBufferlineDiagnosticsConfig 诊断徽标配置 @default { enabled = true }
+---@field hide_tabline boolean 隐藏 Neovim 内置 tabline（buffer 已在 winbar 显示，内置 tabline 冗余）@default true
+---@field render_target 'winbar'|'tabline' 渲染承载；winbar 每窗口显示，tabline 全局显示当前组 @default 'winbar'
+---@field colors VVBufferlineColors? 可选的主题色
