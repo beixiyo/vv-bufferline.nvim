@@ -445,6 +445,66 @@ test('disable() keeps v:lua click callbacks replaced after bufferline setup', fu
   assert(_G.__vv_bufferline_close == external_close, 'disable overwrote an external close bridge')
 end)
 
+local function assert_clicks_work_after_reenable(transition, suffix)
+  setup({ show_close = true })
+  vim.cmd('edit /tmp/vv-bl-reenable-a-' .. suffix .. '.ts')
+  local a = vim.api.nvim_get_current_buf()
+  vim.cmd('edit /tmp/vv-bl-reenable-b-' .. suffix .. '.ts')
+  local b = vim.api.nvim_get_current_buf()
+  local win = vim.api.nvim_get_current_win()
+  vim.wait(80)
+
+  transition()
+  require('vv-bufferline.view').refresh()
+
+  local bar = vim.wo[win].winbar
+  assert(bar:find('@v:lua.__vv_bufferline_select@', 1, true), 'rendered bar is missing the select click target')
+  assert(bar:find('@v:lua.__vv_bufferline_close@', 1, true), 'rendered bar is missing the close click target')
+  assert(type(_G.__vv_bufferline_select) == 'function', 'select click handler was not reinstalled')
+  assert(type(_G.__vv_bufferline_close) == 'function', 'close click handler was not reinstalled')
+
+  local View = require('vv-bufferline.view')
+  local mouse_interaction_win = View.mouse_interaction_win
+  View.mouse_interaction_win = function() return win end
+  local ok, err = pcall(function()
+    _G.__vv_bufferline_select(a)
+    assert(vim.api.nvim_win_get_buf(win) == a, 'reinstalled select handler did not switch buffers')
+
+    _G.__vv_bufferline_close(b)
+    vim.wait(80)
+    assert(not vim.bo[b].buflisted, 'reinstalled close handler did not close the target buffer')
+  end)
+  View.mouse_interaction_win = mouse_interaction_win
+  if not ok then error(err) end
+end
+
+test('enable() reinstalls functional v:lua click handlers after disable()', function()
+  assert_clicks_work_after_reenable(function()
+    require('vv-bufferline').disable()
+    require('vv-bufferline').enable()
+  end, 'enable')
+end)
+
+test('toggle() reinstalls functional v:lua click handlers after re-enable', function()
+  assert_clicks_work_after_reenable(function()
+    require('vv-bufferline').toggle()
+    require('vv-bufferline').toggle()
+  end, 'toggle')
+end)
+
+test('repeated enable does not reclaim click handlers replaced by another owner', function()
+  setup()
+  local external_select = function() end
+  local external_close = function() end
+  _G.__vv_bufferline_select = external_select
+  _G.__vv_bufferline_close = external_close
+
+  require('vv-bufferline').enable()
+
+  assert(_G.__vv_bufferline_select == external_select, 'repeated enable reclaimed an external select handler')
+  assert(_G.__vv_bufferline_close == external_close, 'repeated enable reclaimed an external close handler')
+end)
+
 -- 构造「b 已从 top 分组删除、但仍存活（bottom 分屏持有）」的状态
 local function split_with_removed_buffer()
   setup()
@@ -549,6 +609,25 @@ test('tabline render target keeps bufferline visible without winbar', function()
 
   require('vv-bufferline').disable()
   assert(vim.o.tabline == '', 'disable should restore tabline value')
+end)
+
+test('winbar hide_tabline restores only the global option value it owns', function()
+  require('vv-bufferline').disable()
+  vim.o.showtabline = 2
+
+  setup()
+  assert(vim.o.showtabline == 0, 'winbar setup should hide the built-in tabline')
+  require('vv-bufferline').disable()
+  assert(vim.o.showtabline == 2, 'disable should restore the pre-setup showtabline value')
+
+  setup()
+  require('vv-bufferline').setup({ hide_tabline = false })
+  assert(vim.o.showtabline == 2, 'reconfiguring hide_tabline=false should restore the prior value')
+
+  setup()
+  vim.o.showtabline = 1
+  require('vv-bufferline').disable()
+  assert(vim.o.showtabline == 1, 'disable should preserve a later external showtabline change')
 end)
 
 print(string.format('vv-bufferline smoke: %d passed, %d failed', passed, failed))

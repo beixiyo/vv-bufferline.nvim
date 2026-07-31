@@ -120,7 +120,25 @@ end
 
 -- ===== 重导出 view / close 的公开 API =====
 
-M.enable = View.enable
+local function install_click_handlers()
+  -- Neovim resolves winbar click handlers through these v:lua names.
+  Click.install(function(buf) M.select(buf, { mouse = true }) end, function(buf)
+    local win = View.mouse_interaction_win()
+    if win and vim.api.nvim_win_is_valid(win) and vim.api.nvim_win_get_buf(win) == buf then
+      M.close_current({ mouse = true })
+      return
+    end
+
+    M.close(buf, { mouse = true })
+  end)
+end
+
+function M.enable()
+  if View.enabled then return end
+  install_click_handlers()
+  View.enable()
+end
+
 function M.disable()
   View.disable()
   Click.restore()
@@ -130,7 +148,7 @@ function M.toggle()
   if View.enabled then
     M.disable()
   else
-    View.enable()
+    M.enable()
   end
 end
 
@@ -146,25 +164,10 @@ M.close_all = Close.close_all
 
 ---@param opts? VVBufferlineConfig
 function M.setup(opts)
+  M.disable()
   config = vim.tbl_deep_extend('force', vim.deepcopy(defaults), opts or {})
   State.setup(config)
   View.set_config(config)
-
-  -- vv-bufferline 用 winbar 展示 buffer，内置 tabline 是冗余噪音：多开一个 tab（如打开 vv-git
-  -- 专属 tab）时 Neovim 默认 tabline 会冒出来显示 pathshorten 的标签栏。这里默认隐藏它，
-  -- 接管原 akinsho/bufferline（它当年 set showtabline=2 自管 tabline）留下的这块空缺。
-  if config.hide_tabline and config.render_target ~= 'tabline' then vim.o.showtabline = 0 end
-
-  -- Neovim resolves winbar click handlers through these v:lua names.
-  Click.install(function(buf) M.select(buf, { mouse = true }) end, function(buf)
-    local win = View.mouse_interaction_win()
-    if win and vim.api.nvim_win_is_valid(win) and vim.api.nvim_win_get_buf(win) == buf then
-      M.close_current({ mouse = true })
-      return
-    end
-
-    M.close(buf, { mouse = true })
-  end)
 
   local group = vim.api.nvim_create_augroup('vv_bufferline', { clear = true })
 

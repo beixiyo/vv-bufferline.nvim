@@ -12,7 +12,7 @@ local M = { enabled = false }
 
 local config = {}
 local previous_tabline
-local previous_showtabline
+local owned_showtabline
 local last_editor_win
 local saved_mousemoveevent
 local mousemove_ns
@@ -22,6 +22,27 @@ local mousemove_key = vim.keycode('<MouseMove>')
 
 local function is_tabline_target()
   return config.render_target == 'tabline'
+end
+
+---@param value integer
+local function set_showtabline(value)
+  if not owned_showtabline then
+    owned_showtabline = {
+      previous = vim.o.showtabline,
+      value = value,
+    }
+  else
+    owned_showtabline.value = value
+  end
+  vim.o.showtabline = value
+end
+
+local function restore_showtabline()
+  if not owned_showtabline then return end
+  if vim.o.showtabline == owned_showtabline.value then
+    vim.o.showtabline = owned_showtabline.previous
+  end
+  owned_showtabline = nil
 end
 
 local function cancel_hover_clear()
@@ -183,11 +204,11 @@ function M.refresh()
     end
 
     if win and Window.should_show(win) then
-      vim.o.showtabline = 2
+      set_showtabline(2)
       vim.o.tabline = Render.render(win, config)
     else
       vim.o.tabline = ''
-      if config.hide_tabline then vim.o.showtabline = 0 end
+      if config.hide_tabline then set_showtabline(0) end
     end
     return
   end
@@ -258,7 +279,8 @@ function M.enable()
   enable_hover()
   if is_tabline_target() then
     previous_tabline = vim.o.tabline
-    previous_showtabline = vim.o.showtabline
+  elseif config.hide_tabline then
+    set_showtabline(0)
   end
   M.reload_hl()
 end
@@ -269,8 +291,8 @@ function M.disable()
 
   if is_tabline_target() then
     vim.o.tabline = previous_tabline or ''
-    vim.o.showtabline = previous_showtabline or 0
   end
+  restore_showtabline()
 
   for _, win in ipairs(WinbarHost.owned_wins()) do WinbarHost.restore(win) end
 end
