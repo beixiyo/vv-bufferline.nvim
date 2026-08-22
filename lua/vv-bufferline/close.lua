@@ -48,7 +48,7 @@ local function delete_global_buf(buf, force)
   if #vim.fn.win_findbuf(buf) > 0 then return end
   if State.contains_buf(buf) then return end
 
-  pcall(vim.cmd, 'bdelete! ' .. buf)
+  pcall(vim.cmd, 'bdelete' .. (force and '!' or '') .. ' ' .. buf)
 end
 
 ---@param listed? boolean
@@ -156,7 +156,7 @@ local function close_tab(win, buf, opts)
     if replacement and Window.normal_buf(replacement) then State.add(win, replacement) end
   end
 
-  delete_global_buf(buf, opts.force)
+  delete_global_buf(buf, opts.force or vim.bo[buf].modified)
 end
 
 ---@param buf integer
