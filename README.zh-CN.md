@@ -89,3 +89,28 @@ require('vv-bufferline').setup({
 ## 许可证
 
 [MIT](./LICENSE)
+
+## 开发测试
+
+vv-icons 源码也会按固定版本自动准备，`VV_TEST_ICONS` 仅用于可选的显式覆盖
+
+```sh
+./tests/run.sh
+./tests/run.sh '过滤词'
+# 可选：指定 Neovim
+NVIM_BIN=/path/to/nvim ./tests/run.sh
+```
+
+仅支持 Unix-like 系统；要求 Neovim 0.12+（建议使用 0.12 稳定版）、Git 和 POSIX shell
+直接运行 `./tests/run.sh`，首次自动准备固定版本 vv-utils（`ed9b6ae`）与 mini.test 源码，
+不要求兄弟仓库、个人 Neovim 配置或预装 parser。依赖保存在 `VV_TEST_DEPS_CACHE`，
+默认 `$XDG_CACHE_HOME/nvim-test-deps` 或 `~/.cache/nvim-test-deps`；缓存齐全后可离线运行
+`VV_UTILS` 可显式覆盖共享源码路径；`NVIM_BIN` 默认 `nvim`。过滤词按文件路径或中文用例名
+做字面子串匹配，无匹配视为失败。入口不安装系统工具
+
+每个具名 case 启动全新子 Neovim，不读取个人配置；cwd、HOME、XDG 与临时文件都位于独立 `/tmp`
+父 hook 在断言失败时仍停止子进程并清理 fixture；scheduled 回调异常单独收集后断言
+headless 状态验证不能替代真实终端的视觉和鼠标验证
+
+`nvim-web-devicons` 使用替身，不要求安装第三方图标插件
+覆盖分割组归属、渲染、预览排除、关闭确认、点击桥接所有权和重配置
