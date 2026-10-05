@@ -37,7 +37,7 @@ buffer 列表。Neovim 的 buffer 仍是全局的，只有标签 UI 状态按窗
   跳过、不被叠标签；诊断、图标统一走 `vv-utils` / `vv-icons`。这些是为这套插件
   量身定制的协作点，第三方插件要么做不到，要么得靠 monkey-patch 硬凑
 - **轻**：不接管 Neovim 的 buffer 模型（buffer 仍全局），只维护一层窗口级 UI
-  状态；无多余依赖
+  状态
 
 ## 特性
 
@@ -51,6 +51,17 @@ buffer 列表。Neovim 的 buffer 仍是全局的，只有标签 UI 状态按窗
 - 窄窗口标签截断
 
 ## 安装配置
+
+[vv-utils.nvim](https://github.com/beixiyo/vv-utils.nvim) 是必需依赖，用于诊断、高亮和 buffer 删除。文件图标可选（`nvim-web-devicons`，包括 mini.icons 的兼容层）
+
+```lua
+-- lazy.nvim
+{
+  'beixiyo/vv-bufferline.nvim',
+  dependencies = { 'beixiyo/vv-utils.nvim' },
+  opts = {},
+}
+```
 
 ```lua
 require('vv-bufferline').setup({
@@ -92,25 +103,12 @@ require('vv-bufferline').setup({
 
 ## 开发测试
 
-vv-icons 源码也会按固定版本自动准备，`VV_TEST_ICONS` 仅用于可选的显式覆盖
-
 ```sh
-./tests/run.sh
-./tests/run.sh '过滤词'
-# 可选：指定 Neovim
-NVIM_BIN=/path/to/nvim ./tests/run.sh
+./tests/run.sh [literal-filter]
 ```
 
-仅支持 Unix-like 系统；要求 Neovim 0.12+（建议使用 0.12 稳定版）、Git 和 POSIX shell
-直接运行 `./tests/run.sh`，首次自动准备固定版本 vv-utils（`ed9b6ae`）与 mini.test 源码，
-不要求兄弟仓库、个人 Neovim 配置或预装 parser。依赖保存在 `VV_TEST_DEPS_CACHE`，
-默认 `$XDG_CACHE_HOME/nvim-test-deps` 或 `~/.cache/nvim-test-deps`；缓存齐全后可离线运行
-`VV_UTILS` 可显式覆盖共享源码路径；`NVIM_BIN` 默认 `nvim`。过滤词按文件路径或中文用例名
-做字面子串匹配，无匹配视为失败。入口不安装系统工具
-
-每个具名 case 启动全新子 Neovim，不读取个人配置；cwd、HOME、XDG 与临时文件都位于独立 `/tmp`
-父 hook 在断言失败时仍停止子进程并清理 fixture；scheduled 回调异常单独收集后断言
-headless 状态验证不能替代真实终端的视觉和鼠标验证
-
-`nvim-web-devicons` 使用替身，不要求安装第三方图标插件
-覆盖分割组归属、渲染、预览排除、关闭确认、点击桥接所有权和重配置
+要求 Unix-like 系统、Neovim 0.12+、Git、POSIX shell 与已有 vv-utils checkout
+默认使用开发工作区或已安装插件源码；`VV_UTILS` 可覆盖发现，`NVIM_BIN` 可指定 Neovim。不下载 vv 插件源码
+诊断 fixture 要求已有 vv-icons 源码（`VV_TEST_ICONS` 可覆盖发现）；`nvim-web-devicons` 使用替身
+测试使用隔离 child；headless 验证不替代真实 TUI 交互
+依赖发现、字面过滤、隔离和 CI 前提见 [共享测试契约](https://github.com/beixiyo/vv-utils.nvim/blob/main/dev/test/README.zh-CN.md)
