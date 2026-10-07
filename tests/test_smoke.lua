@@ -1,4 +1,4 @@
--- 真实场景在独立子进程中执行；收集阶段仅注册具名用例。
+-- 真实场景在独立子进程中执行；收集阶段仅注册具名用例
 local H = dofile(vim.env.VV_TEST_REPO .. '/tests/helpers.lua')
 local T, child = H.new_set({ setup = 'fixture_smoke.lua', icons = true })
 
@@ -644,6 +644,239 @@ T["winbar hide_tabline 仅恢复其拥有的全局选项值"] = function()
       vim.o.showtabline = 1
       require('vv-bufferline').disable()
       assert(vim.o.showtabline == 1, 'disable 应保留随后外部修改的 showtabline')
+  end)
+end
+
+T["窗口外修改的隐藏 buffer 自动纳入当前分组"] = function()
+  child.lua_func(function()
+    local setup, assert_clicks_work_after_reenable, split_with_removed_buffer = Smoke.setup, Smoke.assert_clicks_work_after_reenable, Smoke.split_with_removed_buffer
+      -- track_modified 默认开启，验证默认行为
+      setup()
+      assert(require('vv-bufferline.state').get_config().track_modified == true, 'track_modified 默认值应为 true')
+      vim.cmd('edit ' .. vim.fn.fnameescape(vim.env.VV_TEST_TMP .. '/vv-bl-mod-a.ts'))
+      local a = vim.api.nvim_get_current_buf()
+
+      -- 模拟 LSP 跨文件编辑：修改从未进入任何窗口的隐藏 buffer
+      local b = vim.fn.bufadd(vim.env.VV_TEST_TMP .. '/vv-bl-mod-hidden.ts')
+      vim.fn.bufload(b)
+      vim.api.nvim_buf_set_lines(b, 0, -1, false, { 'changed by lsp' })
+      vim.wait(200)
+
+      local State = require('vv-bufferline.state')
+      local win = vim.api.nvim_get_current_win()
+      assert(State.has_in_win(win, b), '隐藏修改 buffer 未自动纳入当前窗口分组')
+      assert(vim.bo[b].buflisted, '纳入分组的 buffer 应转正 buflisted')
+      assert(vim.wo[win].winbar:find('vv-bl-mod-hidden', 1, true), 'winbar 未渲染隐藏修改 buffer')
+      assert(vim.api.nvim_get_current_buf() == a, '自动入列不得切换当前 buffer')
+  end)
+end
+
+T["track_modified 不覆盖显式删除与其他窗口的分组"] = function()
+  child.lua_func(function()
+    local setup, assert_clicks_work_after_reenable, split_with_removed_buffer = Smoke.setup, Smoke.assert_clicks_work_after_reenable, Smoke.split_with_removed_buffer
+      setup()
+      vim.cmd('edit ' .. vim.fn.fnameescape(vim.env.VV_TEST_TMP .. '/vv-bl-rmmod-a.ts'))
+      local win = vim.api.nvim_get_current_win()
+
+      -- 用户显式删除过（removed 标记）的 buffer 不得因窗口外修改复活
+      local r = vim.fn.bufadd(vim.env.VV_TEST_TMP .. '/vv-bl-rmmod-removed.ts')
+      vim.fn.bufload(r)
+      require('vv-bufferline.state').detach(win, r)
+      vim.api.nvim_buf_set_lines(r, 0, -1, false, { 'changed' })
+
+      -- 用真实 split 建立分组，再回到原窗口修改该 buffer
+      vim.cmd.vsplit()
+      vim.cmd('edit ' .. vim.fn.fnameescape(vim.env.VV_TEST_TMP .. '/vv-bl-rmmod-other.ts'))
+      local other = vim.api.nvim_get_current_buf()
+      local other_win = vim.api.nvim_get_current_win()
+      assert(require('vv-bufferline').has(other_win, other), '其他窗口分组前置条件未建立')
+      vim.api.nvim_set_current_win(win)
+      vim.api.nvim_buf_set_lines(other, 0, -1, false, { 'changed in another group' })
+
+      -- 未修改的隐藏 buffer 不纳入
+      local clean = vim.fn.bufadd(vim.env.VV_TEST_TMP .. '/vv-bl-rmmod-clean.ts')
+      vim.fn.bufload(clean)
+
+      vim.wait(200)
+
+      local State = require('vv-bufferline.state')
+      assert(not State.has_in_win(win, r), '显式删除过的 buffer 因窗口外修改复活')
+      assert(not vim.bo[r].buflisted, '被拒绝纳入的 buffer 不应被转正 buflisted')
+      assert(not State.has_in_win(win, other), '已在其他窗口分组的 buffer 被重复纳入')
+      assert(not State.has_in_win(win, clean), '未修改的隐藏 buffer 被纳入')
+      assert(not vim.wo[win].winbar:find('vv-bl-rmmod-removed', 1, true), 'removed buffer 出现在 winbar')
+  end)
+end
+
+T["jump_to_end 按窗口标签顺序跳到端点"] = function()
+  child.lua_func(function()
+    local setup, assert_clicks_work_after_reenable, split_with_removed_buffer = Smoke.setup, Smoke.assert_clicks_work_after_reenable, Smoke.split_with_removed_buffer
+      setup()
+      -- 按访问顺序建立分组 a → b → c，当前在 c（最右）
+      for _, name in ipairs({ 'a', 'b', 'c' }) do
+        vim.cmd('edit ' .. vim.fn.fnameescape(vim.env.VV_TEST_TMP .. '/vv-bl-end-' .. name .. '.ts'))
+      end
+
+      local bl = require('vv-bufferline')
+      bl.jump_to_end('first')
+      vim.wait(50)
+      assert(vim.fn.bufname():find('vv%-bl%-end%-a%.ts$'), 'first 未跳到最左标签，当前: ' .. vim.fn.bufname())
+
+      bl.jump_to_end('last')
+      vim.wait(50)
+      assert(vim.fn.bufname():find('vv%-bl%-end%-c%.ts$'), 'last 未跳到最右标签，当前: ' .. vim.fn.bufname())
+
+      -- 已在端点时保持不变且不报错
+      bl.jump_to_end('last')
+      vim.wait(50)
+      assert(vim.fn.bufname():find('vv%-bl%-end%-c%.ts$'), '重复跳端点应保持当前 buffer')
+  end)
+end
+
+T["默认键位接管内置映射且可关闭"] = function()
+  child.lua_func(function()
+    local setup, assert_clicks_work_after_reenable, split_with_removed_buffer = Smoke.setup, Smoke.assert_clicks_work_after_reenable, Smoke.split_with_removed_buffer
+      local all_keys = { '[b', ']b', '[B', ']B', '<leader>bd', '<leader>bD', '<leader>bh', '<leader>bl', '<leader>bo', '<leader>ba' }
+      local previous = {}
+      for _, lhs in ipairs(all_keys) do previous[lhs] = vim.fn.maparg(lhs, 'n', false, true) end
+      setup()
+      for _, lhs in ipairs(all_keys) do
+        local m = vim.fn.maparg(lhs, 'n', false, true)
+        assert(type(m) == 'table' and type(m.callback) == 'function', lhs .. ' 未注册默认键位')
+        assert(m.desc and m.desc:find('vv-bufferline', 1, true), lhs .. ' desc 缺少 vv-bufferline 前缀: ' .. tostring(m.desc))
+      end
+
+      -- 按访问顺序建立分组 a → b → c，验证 ]B / [B 回调按窗口标签序跳端点
+      for _, name in ipairs({ 'a', 'b', 'c' }) do
+        vim.cmd('edit ' .. vim.fn.fnameescape(vim.env.VV_TEST_TMP .. '/vv-bl-keys-' .. name .. '.ts'))
+      end
+      vim.fn.maparg(']B', 'n', false, true).callback()
+      assert(vim.fn.bufname():find('vv%-bl%-keys%-c%.ts$'), ']B 回调未跳到最右标签')
+      vim.fn.maparg('[B', 'n', false, true).callback()
+      assert(vim.fn.bufname():find('vv%-bl%-keys%-a%.ts$'), '[B 回调未跳到最左标签')
+
+      -- keys = false 撤销默认键位，不残留
+      setup({ keys = false })
+      for _, lhs in ipairs(all_keys) do
+        local restored = vim.fn.maparg(lhs, 'n', false, true)
+        assert(restored.rhs == previous[lhs].rhs and restored.callback == previous[lhs].callback,
+          'keys=false 后 ' .. lhs .. ' 未恢复接管前的映射')
+      end
+  end)
+end
+
+T["after_close 回调携带动作名"] = function()
+  child.lua_func(function()
+    local setup, assert_clicks_work_after_reenable, split_with_removed_buffer = Smoke.setup, Smoke.assert_clicks_work_after_reenable, Smoke.split_with_removed_buffer
+      local seen = {}
+      setup({ hooks = { after_close = function(ctx) table.insert(seen, ctx.action) end } })
+      for _, name in ipairs({ 'a', 'b', 'c' }) do
+        vim.cmd('edit ' .. vim.fn.fnameescape(vim.env.VV_TEST_TMP .. '/vv-bl-hook-' .. name .. '.ts'))
+      end
+
+      -- 键位回调与直接 API 都触发 hook，动作名区分入口
+      vim.fn.maparg('<leader>bd', 'n', false, true).callback()
+      vim.wait(80)
+      assert(#seen == 1 and seen[1] == 'close_current', 'close 键位未触发 after_close: ' .. vim.inspect(seen))
+
+      vim.fn.maparg('<leader>bo', 'n', false, true).callback()
+      vim.wait(80)
+      assert(#seen == 2 and seen[2] == 'close_others', 'close_others 未触发: ' .. vim.inspect(seen))
+
+      -- hook 报错被捕获并通知，关闭流程本身不受影响
+      setup({ hooks = { after_close = function() error('boom') end } })
+      local bl = require('vv-bufferline')
+      local closing = vim.api.nvim_get_current_buf()
+      local notifications = {}
+      local notify = vim.notify
+      vim.notify = function(message, level) notifications[#notifications + 1] = { message, level } end
+      local ok, err = pcall(bl.close_current)
+      vim.wait(80)
+      vim.notify = notify
+      assert(ok, err)
+      assert(not vim.bo[closing].buflisted, 'hook 报错影响了实际关闭')
+      assert(#notifications == 1 and notifications[1][2] == vim.log.levels.ERROR
+        and notifications[1][1]:find('boom', 1, true), 'hook 错误未以 ERROR 通知')
+  end)
+end
+
+T["被忽略 tab 中的修改归属最近编辑窗口"] = function()
+  child.lua_func(function()
+    local setup, assert_clicks_work_after_reenable, split_with_removed_buffer = Smoke.setup, Smoke.assert_clicks_work_after_reenable, Smoke.split_with_removed_buffer
+      setup()
+      vim.cmd('edit ' .. vim.fn.fnameescape(vim.env.VV_TEST_TMP .. '/vv-bl-ig-a.ts'))
+      local main = vim.api.nvim_get_current_win()
+
+      -- 模拟 vv-git：独立 tab + 忽略标记，在其中打开并修改文件
+      vim.cmd('tab split')
+      vim.api.nvim_tabpage_set_var(0, 'vv_bufferline_ignore', true)
+      vim.cmd('edit ' .. vim.fn.fnameescape(vim.env.VV_TEST_TMP .. '/vv-bl-ig-b.ts'))
+      local b = vim.api.nvim_get_current_buf()
+      vim.api.nvim_buf_set_lines(b, 0, -1, false, { 'changed in ignored tab' })
+      vim.wait(300)
+
+      -- 修改发生在被忽略的 tab，也应归属到之前的编辑窗口分组
+      local State = require('vv-bufferline.state')
+      assert(State.has_in_win(main, b), '被忽略 tab 中的修改未归属最近编辑窗口')
+
+      -- 回到主 tab 后标签可见
+      vim.cmd('tabclose')
+      vim.wait(100)
+      assert(vim.api.nvim_get_current_win() == main, 'tabclose 后未回到主窗口')
+      assert(vim.wo[main].winbar:find('vv%-bl%-ig%-b', 1, true) or vim.wo[main].winbar:find('vv-bl-ig-b', 1, true), '主窗口 winbar 未显示被忽略 tab 中的修改')
+  end)
+end
+
+T["dashboard-only 会话的修改直接顶替占位内容显示"] = function()
+  child.lua_func(function()
+    local setup, assert_clicks_work_after_reenable, split_with_removed_buffer = Smoke.setup, Smoke.assert_clicks_work_after_reenable, Smoke.split_with_removed_buffer
+      setup()
+      local main = vim.api.nvim_get_current_win()
+
+      -- 不先打开编辑文件：真正的 dashboard-only 初始分组为空
+      local dash = vim.api.nvim_create_buf(false, true)
+      vim.bo[dash].buftype = 'nofile'
+      vim.bo[dash].filetype = 'dashboard'
+      vim.bo[dash].bufhidden = 'wipe'
+      vim.api.nvim_win_set_buf(main, dash)
+      require('vv-bufferline.view').track_current()
+
+      vim.cmd('tab split')
+      vim.api.nvim_tabpage_set_var(0, 'vv_bufferline_ignore', true)
+      vim.cmd('edit ' .. vim.fn.fnameescape(vim.env.VV_TEST_TMP .. '/vv-bl-dash-hidden.ts'))
+      local b = vim.api.nvim_get_current_buf()
+      vim.api.nvim_buf_set_lines(b, 0, -1, false, { 'changed' })
+      vim.wait(300)
+
+      -- 修改直接把归属窗口从占位内容切到该 buffer：q 关闭 vv-git 后第一眼就是它
+      local State = require('vv-bufferline.state')
+      assert(State.has_in_win(main, b), '修改未归属主窗口分组')
+      assert(vim.api.nvim_win_get_buf(main) == b, '归属窗口未从占位内容切到修改的 buffer')
+
+      vim.cmd('tabclose')
+      vim.wait(100)
+      assert(vim.wo[main].winbar:find('vv-bl-dash-hidden', 1, true), 'winbar 未显示修改标签')
+  end)
+end
+
+T["已显示编辑内容的归属窗口只加标签不切换"] = function()
+  child.lua_func(function()
+    local setup, assert_clicks_work_after_reenable, split_with_removed_buffer = Smoke.setup, Smoke.assert_clicks_work_after_reenable, Smoke.split_with_removed_buffer
+      setup()
+      vim.cmd('edit ' .. vim.fn.fnameescape(vim.env.VV_TEST_TMP .. '/vv-bl-keep-a.ts'))
+      local a = vim.api.nvim_get_current_buf()
+      local main = vim.api.nvim_get_current_win()
+
+      vim.cmd('tab split')
+      vim.api.nvim_tabpage_set_var(0, 'vv_bufferline_ignore', true)
+      vim.cmd('edit ' .. vim.fn.fnameescape(vim.env.VV_TEST_TMP .. '/vv-bl-keep-b.ts'))
+      local b = vim.api.nvim_get_current_buf()
+      vim.api.nvim_buf_set_lines(b, 0, -1, false, { 'changed' })
+      vim.wait(300)
+
+      local State = require('vv-bufferline.state')
+      assert(State.has_in_win(main, b), '修改未归属主窗口分组')
+      assert(vim.api.nvim_win_get_buf(main) == a, '正在显示编辑内容的窗口被切走')
   end)
 end
 

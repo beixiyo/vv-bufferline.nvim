@@ -231,12 +231,12 @@ function M.track_current()
   local win = vim.api.nvim_get_current_win()
   if not Window.is_editor_win(win) then return end
   if Window.ignored_win(win) then return end
-  last_editor_win = win
+  if Window.modification_win(win) then last_editor_win = win end
 
   local buf = vim.api.nvim_get_current_buf()
   if State.is_preview(win, buf) then return end
-  -- 用户在该窗口显式删除过此 buf → 不因一次自动 BufEnter 把它复原。
-  -- 真正落定显示它时，render 的 State.add 会清掉 removed 并重新纳入分组。
+  -- 用户在该窗口显式删除过此 buf → 不因一次自动 BufEnter 把它复原
+  -- 真正落定显示它时，render 的 State.add 会清掉 removed 并重新纳入分组
   if State.is_removed(win, buf) then return end
   if Window.normal_buf(buf) then State.add(win, buf) end
 end
@@ -268,6 +268,27 @@ function M.interaction_win()
     if Window.should_show(win) then
       last_editor_win = win
       return win
+    end
+  end
+end
+
+-- 窗口外修改 buffer 的归属窗口：当前交互窗口 → 最近交互的编辑窗口 → 任意编辑窗口
+-- 修改可能发生在被忽略的 tab（如 vv-git 的 diff 编辑窗）或 dashboard-only 会话，
+-- 归属不因此丢弃；目标窗口回到编辑态时其分组的标签随之渲染
+---@return integer?
+function M.modification_target_win()
+  local cur = vim.api.nvim_get_current_win()
+  if Window.modification_win(cur) then return cur end
+
+  if last_editor_win and Window.modification_win(last_editor_win) then return last_editor_win end
+
+  -- 当前 tab 优先；只剩 ignored tab 时才回退其他 tab
+  for _, win in ipairs(vim.api.nvim_tabpage_list_wins(0)) do
+    if Window.modification_win(win) then return win end
+  end
+  for _, tabpage in ipairs(vim.api.nvim_list_tabpages()) do
+    for _, win in ipairs(vim.api.nvim_tabpage_list_wins(tabpage)) do
+      if Window.modification_win(win) then return win end
     end
   end
 end

@@ -199,6 +199,16 @@ function M.is_preview(win, buf)
   return M.preview_bufs[win] == buf
 end
 
+---预览归属按所有存活窗口检查，避免外部修改跨分组抢占预览生命周期
+---@param buf integer
+---@return boolean
+function M.has_preview(buf)
+  for win, preview in pairs(M.preview_bufs) do
+    if preview == buf and vim.api.nvim_win_is_valid(win) then return true end
+  end
+  return false
+end
+
 ---@param buf integer
 function M.remove_buf(buf)
   for _, s in pairs(M.wins) do

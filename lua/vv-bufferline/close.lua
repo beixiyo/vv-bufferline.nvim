@@ -157,6 +157,7 @@ local function close_tab(win, buf, opts)
   end
 
   delete_global_buf(buf, opts.force or vim.bo[buf].modified)
+  return true
 end
 
 ---@param buf integer
@@ -167,8 +168,9 @@ function M.close(buf, opts)
   local win = opts.mouse and View.mouse_interaction_win() or View.interaction_win()
   if not win or not vim.api.nvim_win_is_valid(win) then return end
 
-  close_tab(win, buf, opts)
+  local completed = close_tab(win, buf, opts) == true
   vim.schedule(View.refresh)
+  return completed
 end
 
 ---@param opts? {force?:boolean}
@@ -177,8 +179,9 @@ function M.close_current(opts)
   local win = opts.mouse and View.mouse_interaction_win() or View.interaction_win()
   if not win or not vim.api.nvim_win_is_valid(win) then return end
 
-  close_tab(win, vim.api.nvim_win_get_buf(win), opts)
+  local completed = close_tab(win, vim.api.nvim_win_get_buf(win), opts) == true
   vim.schedule(View.refresh)
+  return completed
 end
 
 ---@param side 'left'|'right'
@@ -207,19 +210,21 @@ local function close_side(side)
     end
   end
 
+  local completed = true
   for _, buf in ipairs(targets) do
-    if vim.api.nvim_buf_is_valid(buf) then close_tab(win, buf) end
+    if vim.api.nvim_buf_is_valid(buf) and not close_tab(win, buf) then completed = false end
   end
 
   vim.schedule(View.refresh)
+  return completed
 end
 
 function M.close_left()
-  close_side('left')
+  return close_side('left')
 end
 
 function M.close_right()
-  close_side('right')
+  return close_side('right')
 end
 
 function M.close_others()
@@ -235,11 +240,13 @@ function M.close_others()
     if buf ~= cur then table.insert(targets, buf) end
   end
 
+  local completed = true
   for _, buf in ipairs(targets) do
-    close_tab(win, buf)
+    if not close_tab(win, buf) then completed = false end
   end
 
   vim.schedule(View.refresh)
+  return completed
 end
 
 ---@param opts? {force?:boolean, close_windows?:boolean}
@@ -272,17 +279,22 @@ function M.close_all(opts)
 
   State.clear_buffers()
 
+  local completed = true
   for _, buf in ipairs(targets) do
-    if vim.api.nvim_buf_is_valid(buf) then pcall(vim.cmd, 'bdelete! ' .. buf) end
+    if vim.api.nvim_buf_is_valid(buf) then
+      local ok = pcall(vim.cmd, 'bdelete! ' .. buf)
+      if not ok then completed = false end
+    end
   end
 
   if opts.close_windows then
     pcall(vim.cmd, 'silent! only')
     View.restore_all_winbars()
-    return
+    return completed
   end
 
   vim.schedule(View.refresh)
+  return completed
 end
 
 return M

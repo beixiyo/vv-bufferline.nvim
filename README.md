@@ -10,7 +10,7 @@ Want my Neovim config? See <a href="https://github.com/beixiyo/dotfiles">dotfile
 
 A VSCode-like **split-local** buffer tabline
 
-<img src="https://img.shields.io/badge/Neovim-0.10%2B-57A143?logo=neovim&logoColor=white" alt="Neovim" />
+<img src="https://img.shields.io/badge/Neovim-0.12%2B-57A143?logo=neovim&logoColor=white" alt="Neovim" />
 <img src="https://img.shields.io/badge/Lua-2C2D72?logo=lua&logoColor=white" alt="Lua" />
 
 </div>
@@ -52,9 +52,12 @@ design, or can only fake with hacks:
 
 - Per-window buffer tabs for normal editor windows
 - Click a tab → switch to that buffer in the current split
-- Hovering a tab shows `×`; clicking `×` → closes via `vv-utils.bufdelete`
+- Hovering a tab shows `×`; clicking `×` closes it in that group and deletes the buffer only when no other references remain
 - File icons and colors via `vv-icons` / `mini.icons`
 - Modified indicator
+- `track_modified`: buffers modified outside any window (e.g. cross-file
+  LSP edits) are automatically added to an eligible group and marked listed.
+  Full hidden-buffer tracking requires Neovim 0.13+
 - Diagnostic badges via `vv-utils.diagnostics`
 - Automatically filters special windows: help, quickfix, terminal,
   `vv-explorer`, `vv-git`, diff windows
@@ -62,7 +65,7 @@ design, or can only fake with hacks:
 
 ## Installation and configuration
 
-[vv-utils.nvim](https://github.com/beixiyo/vv-utils.nvim) is required for diagnostics, highlights and buffer deletion. File icons are optional (`nvim-web-devicons`, including mini.icons' compatibility layer).
+[vv-utils.nvim](https://github.com/beixiyo/vv-utils.nvim) is required for diagnostics and highlights. File icons are optional (`nvim-web-devicons`, including mini.icons' compatibility layer).
 
 ```lua
 -- lazy.nvim
@@ -81,24 +84,25 @@ require('vv-bufferline').setup({
   diagnostics = { enabled = true },
   hide_tabline = true,            -- 隐藏内置 tabline（buffer 已在 winbar 显示）
   render_target = 'winbar',       -- 'winbar' 每窗口显示；'tabline' 全局显示当前组
+  track_modified = true,          -- 完整隐藏修改追踪需要 Neovim 0.13+
+  placeholder_filetypes = { alpha = true, dashboard = true, ministarter = true },
+  keys = {
+    prev = '[b',
+    next = ']b',
+    first = '[B',
+    last = ']B',
+    close = '<leader>bd',
+    close_force = '<leader>bD',
+    close_left = '<leader>bh',
+    close_right = '<leader>bl',
+    close_others = '<leader>bo',
+    close_all = '<leader>ba',
+  },
+  -- hooks = { after_close = function(ctx) ... end }  -- 关闭后编排（如 tab 空时开 dashboard）
   -- exclude_filetypes = { ... }  -- 不显示标签栏的 filetype
   -- colors = { ... }             -- 可选主题色
 })
 ```
-
-Option meanings:
-
-- `max_name_width`: max display width of a file name before it is truncated
-- `show_close`: always show the close button
-- `hover_close`: show the close button when hovering a tab, without taking up
-  extra layout width
-- `diagnostics`: diagnostic badges
-- `hide_tabline`: hide the built-in tabline (buffers are already shown in the
-  winbar)
-- `render_target`: `'winbar'` renders per window; `'tabline'` renders the
-  current group globally
-- `exclude_filetypes`: filetypes for which the tabline is not shown
-- `colors`: optional theme colors
 
 ## Commands
 
@@ -113,6 +117,8 @@ Option meanings:
 | `:VVBufferlineCloseRight` | Close the buffers to the right of the current tab |
 | `:VVBufferlineCloseOthers` | Close all buffers except the current tab |
 | `:VVBufferlineCloseAll` | Close all buffers |
+| `:VVBufferlineFirst` | Jump to the first tab of the current window's group |
+| `:VVBufferlineLast` | Jump to the last tab of the current window's group |
 
 ## Design
 

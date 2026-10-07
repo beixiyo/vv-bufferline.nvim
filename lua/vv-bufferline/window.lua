@@ -2,17 +2,24 @@
 -- close/view 等模块由此共享同一套编辑区判定
 
 local State = require('vv-bufferline.state')
+local BufDelete = require('vv-utils.bufdelete')
 
 local M = {}
 
 ---@param buf integer
 ---@return boolean
-function M.normal_buf(buf)
+function M.file_buf(buf)
   if not vim.api.nvim_buf_is_valid(buf) then return false end
-  if not vim.bo[buf].buflisted or vim.bo[buf].buftype ~= '' then return false end
+  if vim.bo[buf].buftype ~= '' then return false end
 
   local excluded = State.get_config().exclude_filetypes or {}
   return not excluded[vim.bo[buf].filetype]
+end
+
+---@param buf integer
+---@return boolean
+function M.normal_buf(buf)
+  return M.file_buf(buf) and vim.bo[buf].buflisted
 end
 
 ---@param win integer
@@ -21,6 +28,25 @@ function M.is_editor_win(win)
   return vim.api.nvim_win_is_valid(win)
     and vim.api.nvim_win_get_config(win).relative == ''
     and not vim.wo[win].winfixbuf
+end
+
+---仅空白 buffer 与显式配置的起始页可被后台修改顶替；其他 nofile 面板不是占位
+---@param buf integer
+---@return boolean
+function M.placeholder_buf(buf)
+  if not vim.api.nvim_buf_is_valid(buf) or vim.bo[buf].modified then return false end
+  if vim.bo[buf].buftype == 'nofile' then
+    return (State.get_config().placeholder_filetypes or {})[vim.bo[buf].filetype] == true
+  end
+  return vim.bo[buf].filetype == '' and BufDelete.is_throwaway(buf)
+end
+
+---后台修改只能归属正常编辑区或可顶替的占位窗口
+---@param win integer
+---@return boolean
+function M.modification_win(win)
+  return M.is_editor_win(win) and not M.ignored_win(win)
+    and (M.should_show(win) or M.placeholder_buf(vim.api.nvim_win_get_buf(win)))
 end
 
 ---@param win integer

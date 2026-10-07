@@ -10,7 +10,7 @@
 
 类 VSCode 的**分屏局部** buffer 标签栏
 
-<img src="https://img.shields.io/badge/Neovim-0.10%2B-57A143?logo=neovim&logoColor=white" alt="Neovim" />
+<img src="https://img.shields.io/badge/Neovim-0.12%2B-57A143?logo=neovim&logoColor=white" alt="Neovim" />
 <img src="https://img.shields.io/badge/Lua-2C2D72?logo=lua&logoColor=white" alt="Lua" />
 
 </div>
@@ -43,16 +43,20 @@ buffer 列表。Neovim 的 buffer 仍是全局的，只有标签 UI 状态按窗
 
 - 普通编辑窗口的按窗口 buffer 标签
 - 点击标签 → 在当前分屏切换该 buffer
-- hover 标签时显示 `×`，点击 `×` → 经 `vv-utils.bufdelete` 关闭
+- hover 标签时显示 `×`，点击 `×` → 从当前分组关闭，无其他引用时删除 buffer
 - 文件图标与配色经 `vv-icons` / `mini.icons`
 - 已修改标记
+- `track_modified`：未归属任何分组的修改 buffer 自动入列并转为 listed（默认开启）；
+  完整的隐藏修改追踪需要 Neovim 0.13+
+- 默认 `[b`/`]b`/`[B`/`]B` 键位按窗口标签序切换（内置映射走全局 buffer 列表，
+  与分组顺序不一致）
 - 诊断徽标经 `vv-utils.diagnostics`
 - 自动过滤特殊窗口：help、quickfix、终端、`vv-explorer`、`vv-git`、diff 窗
 - 窄窗口标签截断
 
 ## 安装配置
 
-[vv-utils.nvim](https://github.com/beixiyo/vv-utils.nvim) 是必需依赖，用于诊断、高亮和 buffer 删除。文件图标可选（`nvim-web-devicons`，包括 mini.icons 的兼容层）
+[vv-utils.nvim](https://github.com/beixiyo/vv-utils.nvim) 是必需依赖，用于诊断和高亮。文件图标可选（`nvim-web-devicons`，包括 mini.icons 的兼容层）
 
 ```lua
 -- lazy.nvim
@@ -71,6 +75,21 @@ require('vv-bufferline').setup({
   diagnostics = { enabled = true },
   hide_tabline = true,            -- 隐藏内置 tabline（buffer 已在 winbar 显示）
   render_target = 'winbar',       -- 'winbar' 每窗口显示；'tabline' 全局显示当前组
+  track_modified = true,          -- 完整隐藏修改追踪需要 Neovim 0.13+
+  placeholder_filetypes = { alpha = true, dashboard = true, ministarter = true },
+  keys = {
+    prev = '[b',
+    next = ']b',
+    first = '[B',
+    last = ']B',
+    close = '<leader>bd',
+    close_force = '<leader>bD',
+    close_left = '<leader>bh',
+    close_right = '<leader>bl',
+    close_others = '<leader>bo',
+    close_all = '<leader>ba',
+  },
+  -- hooks = { after_close = function(ctx) ... end }  -- 关闭后编排（如 tab 空时开 dashboard）
   -- exclude_filetypes = { ... }  -- 不显示标签栏的 filetype
   -- colors = { ... }             -- 可选主题色
 })
@@ -89,6 +108,8 @@ require('vv-bufferline').setup({
 | `:VVBufferlineCloseRight` | 关闭当前标签右侧的 buffer |
 | `:VVBufferlineCloseOthers` | 关闭当前标签以外的 buffer |
 | `:VVBufferlineCloseAll` | 关闭全部 buffer |
+| `:VVBufferlineFirst` | 跳到当前窗口分组的最左标签 |
+| `:VVBufferlineLast` | 跳到当前窗口分组的最右标签 |
 
 ## 设计
 
