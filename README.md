@@ -98,6 +98,7 @@ require('vv-bufferline').setup({
     close_others = '<leader>bo',
     close_all = '<leader>ba',
   },
+  -- keys = false                 -- 整体禁用默认键位；单项设为 false 只禁用该键；不写（nil）取默认值
   -- hooks = { after_close = function(ctx) ... end }  -- 关闭后编排（如 tab 空时开 dashboard）
   -- exclude_filetypes = { ... }  -- 不显示标签栏的 filetype
   -- colors = { ... }             -- 可选主题色

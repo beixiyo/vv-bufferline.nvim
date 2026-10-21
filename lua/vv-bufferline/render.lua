@@ -42,7 +42,7 @@ local function item_for(win, buf, current, counts, diag_snapshot, config)
   local mark = modified and '● ' or ''
   local icon, icon_hl = Icons.get(buf, current)
   local icon_text = icon ~= '' and (' ' .. icon .. ' ') or ' '
-  local diag = Diagnostics.component(buf, diag_snapshot, current, config.diagnostics or {})
+  local diag = Diagnostics.component(buf, diag_snapshot, current, config.diagnostics)
   local close_visible = config.show_close or (config.hover_close and State.hovered_buf(win) == buf)
 
   local tab_hl = current and 'VVBufferlineCurrent' or 'VVBufferlineTab'
@@ -147,7 +147,7 @@ function M.render(win, config)
   local buf = vim.api.nvim_win_get_buf(win)
   -- 当前 buffer 不纳入分组的两种情况：
   --   • is_preview：临时预览 buf，渲染既有标签但不把它加进分组（保持预览不污染 bufferline）；
-  --   • is_removed：用户显式删过，周期 refresh 不得复原（复原只留给 select/commit/replacement 的直接 add）。
+  --   • is_removed：用户显式删过，周期 refresh 不得复原（复原只留给 select/commit/replacement 的直接 add）
   if not State.is_preview(win, buf) and not State.is_removed(win, buf) then
     State.add(win, buf)
   end

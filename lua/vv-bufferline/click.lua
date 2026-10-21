@@ -4,7 +4,6 @@
 ---@class VVBufferlineClickOwner
 ---@field install fun(select: VVBufferlineClickCallback, close: VVBufferlineClickCallback)
 ---@field restore fun()
----@type VVBufferlineClickOwner
 local M = {}
 
 local previous = {}

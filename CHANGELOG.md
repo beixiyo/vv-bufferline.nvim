@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.3.0 - 2026-10-21
+
+### Changed
+
+- 输入类型统一为 `VVBufferlineOpts`，由 `VVBufferlineConfig` 派生
+- `setup` 不再返回配置；新增公共 `get_config()`，返回当前 `VVBufferlineConfig` 的深拷贝
+- `keys` 设为 `false`（整体或单项）禁用，不写取默认值
+
 ## 0.2.0 - 2026-10-07
 
 ### Added

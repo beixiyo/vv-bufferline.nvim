@@ -161,6 +161,7 @@ local function close_tab(win, buf, opts)
 end
 
 ---@param buf integer
+---@param opts? {force?:boolean, mouse?:boolean}
 function M.close(buf, opts)
   if not vim.api.nvim_buf_is_valid(buf) then return end
 
@@ -173,7 +174,7 @@ function M.close(buf, opts)
   return completed
 end
 
----@param opts? {force?:boolean}
+---@param opts? {force?:boolean, mouse?:boolean}
 function M.close_current(opts)
   opts = opts or {}
   local win = opts.mouse and View.mouse_interaction_win() or View.interaction_win()

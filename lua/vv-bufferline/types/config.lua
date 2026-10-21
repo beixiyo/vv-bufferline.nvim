@@ -11,16 +11,16 @@
 ---@field modified_fg string? 已修改标记的前景色
 
 ---@class VVBufferlineKeysConfig
----@field prev string|false|nil 切到当前窗口的上一个标签 @default '[b'
----@field next string|false|nil 切到当前窗口的下一个标签 @default ']b'
----@field first string|false|nil 跳到当前窗口的最左标签 @default '[B'
----@field last string|false|nil 跳到当前窗口的最右标签 @default ']B'
----@field close string|false|nil 关闭当前标签（未保存时确认） @default '<leader>bd'
----@field close_force string|false|nil 强制关闭当前标签（丢弃未保存） @default '<leader>bD'
----@field close_left string|false|nil 关闭当前标签左侧的 buffer @default '<leader>bh'
----@field close_right string|false|nil 关闭当前标签右侧的 buffer @default '<leader>bl'
----@field close_others string|false|nil 关闭当前标签以外的 buffer @default '<leader>bo'
----@field close_all string|false|nil 关闭全部 buffer 并收起分屏 @default '<leader>ba'
+---@field prev string|false 切到当前窗口的上一个标签 @default '[b'
+---@field next string|false 切到当前窗口的下一个标签 @default ']b'
+---@field first string|false 跳到当前窗口的最左标签 @default '[B'
+---@field last string|false 跳到当前窗口的最右标签 @default ']B'
+---@field close string|false 关闭当前标签（未保存时确认） @default '<leader>bd'
+---@field close_force string|false 强制关闭当前标签（丢弃未保存） @default '<leader>bD'
+---@field close_left string|false 关闭当前标签左侧的 buffer @default '<leader>bh'
+---@field close_right string|false 关闭当前标签右侧的 buffer @default '<leader>bl'
+---@field close_others string|false 关闭当前标签以外的 buffer @default '<leader>bo'
+---@field close_all string|false 关闭全部 buffer 并收起分屏 @default '<leader>ba'
 
 ---@class VVBufferlineCloseCtx
 ---@field action 'close'|'close_current'|'close_left'|'close_right'|'close_others'|'close_all' 触发的关闭动作
@@ -43,3 +43,14 @@
 ---@field keys VVBufferlineKeysConfig|false 按窗口标签序切换与关闭的默认键位，接管内置 [b/]b/[B/]B；false 不注册 @default { prev = '[b', next = ']b', first = '[B', last = ']B', close = '<leader>bd', close_force = '<leader>bD', close_left = '<leader>bh', close_right = '<leader>bl', close_others = '<leader>bo', close_all = '<leader>ba' }
 ---@field hooks VVBufferlineHooksConfig 行为回调 @default {}
 ---@field colors VVBufferlineColors? 可选的主题色
+
+---@class (partial) VVBufferlineDiagnosticsOpts: VVBufferlineDiagnosticsConfig
+
+---@class (partial) VVBufferlineKeysOpts: VVBufferlineKeysConfig
+
+---@class (partial) VVBufferlineHooksOpts: VVBufferlineHooksConfig
+
+---@class (partial) VVBufferlineOpts: VVBufferlineConfig
+---@field diagnostics? VVBufferlineDiagnosticsOpts
+---@field keys? VVBufferlineKeysOpts|false
+---@field hooks? VVBufferlineHooksOpts

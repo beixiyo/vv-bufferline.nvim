@@ -262,6 +262,7 @@ local function run_close(action, ...)
 end
 
 ---关闭指定标签
+---@param opts? {force?:boolean, mouse?:boolean}
 function M.close(buf, opts)
   return run_close('close', buf, opts)
 end
@@ -291,7 +292,13 @@ function M.close_all(opts)
   return run_close('close_all', opts)
 end
 
----@param opts? VVBufferlineConfig
+---获取当前配置（只读副本）
+---@return VVBufferlineConfig
+function M.get_config()
+  return vim.deepcopy(config)
+end
+
+---@param opts? VVBufferlineOpts
 function M.setup(opts)
   M.disable()
   config = vim.tbl_deep_extend('force', vim.deepcopy(defaults), opts or {})
