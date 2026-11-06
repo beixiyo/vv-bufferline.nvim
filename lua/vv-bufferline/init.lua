@@ -7,6 +7,7 @@
 -- 公开 API。逻辑分布：state（状态模型）· render（纯渲染）· view（渲染同步引擎）·
 -- close（关闭/删除编排）
 
+local Async = require('vv-utils.async')
 local State = require('vv-bufferline.state')
 local Window = require('vv-bufferline.window')
 local WinbarHost = require('vv-bufferline.winbar_host')
@@ -57,6 +58,12 @@ local defaults = {
 ---@type VVBufferlineConfig
 local config = vim.deepcopy(defaults)
 local tracking_generation = 0
+---@type vv-utils.async.CoalesceHandle?
+local refresh_queue
+
+local function request_refresh()
+  if refresh_queue then refresh_queue:request() end
+end
 
 -- ===== 公开交互 API（触碰 state 并重绘，薄封装放在入口）=====
 
@@ -224,12 +231,17 @@ end
 
 function M.enable()
   if View.enabled then return end
+  refresh_queue = Async.coalesce({ run = function() View.refresh() end })
   install_click_handlers()
   CursorHandoff.enable()
   View.enable()
 end
 
 function M.disable()
+  if refresh_queue then
+    refresh_queue:dispose()
+    refresh_queue = nil
+  end
   tracking_generation = tracking_generation + 1
   CursorHandoff.disable()
   View.disable()
@@ -316,7 +328,7 @@ function M.setup(opts)
     group = group,
     callback = function()
       View.track_current()
-      vim.schedule(View.refresh)
+      request_refresh()
     end,
   })
 
@@ -324,13 +336,13 @@ function M.setup(opts)
     group = group,
     callback = function(args)
       State.remove_buf(args.buf)
-      vim.schedule(View.refresh)
+      request_refresh()
     end,
   })
 
   vim.api.nvim_create_autocmd({ 'TextChanged', 'TextChangedI', 'BufWritePost', 'DiagnosticChanged' }, {
     group = group,
-    callback = function() vim.schedule(View.refresh) end,
+    callback = request_refresh,
   })
 
   -- 窗口外被修改的 buffer（LSP 跨文件编辑、后台格式化等）若未出现在任何窗口分组，

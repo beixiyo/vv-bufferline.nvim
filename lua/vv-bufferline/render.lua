@@ -138,7 +138,8 @@ end
 
 ---@param win integer
 ---@param config VVBufferlineConfig
-function M.render(win, config)
+---@param diag_snapshot table<string, table<integer, integer>> 本次刷新共享的诊断快照
+function M.render(win, config, diag_snapshot)
   if not Window.should_show(win) then
     State.clear_layout(win)
     return ''
@@ -160,7 +161,6 @@ function M.render(win, config)
     counts[base] = (counts[base] or 0) + 1
   end
 
-  local diag_snapshot = Diagnostics.snapshot()
   local items = {}
   for _, b in ipairs(s.bufs) do
     table.insert(items, item_for(win, b, b == buf, counts, diag_snapshot, config))

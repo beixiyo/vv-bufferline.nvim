@@ -6,6 +6,7 @@ local State = require('vv-bufferline.state')
 local Window = require('vv-bufferline.window')
 local WinbarHost = require('vv-bufferline.winbar_host')
 local Render = require('vv-bufferline.render')
+local Diagnostics = require('vv-bufferline.diagnostics')
 local HL = require('vv-bufferline.hl')
 
 local M = { enabled = false }
@@ -176,36 +177,20 @@ function M.mouse_interaction_win()
   return win
 end
 
----@param win integer
-local function apply_winbar(win)
-  if not vim.api.nvim_win_is_valid(win) then return end
-
-  -- 预览态下若窗口已有固定分组，should_show 仍为真 → 标签栏保留可见（不再消失）
-  if not Window.should_show(win) then
-    WinbarHost.restore(win)
-    -- tab split / :split 会把 bufferline winbar 继承到新窗口；该窗口不该显示却没被
-    -- 我们登记 owned 时，restore 不生效 → 主动清掉这份继承来的残留（只清我们自己的串）
-    WinbarHost.clear_orphan(win)
-    return
-  end
-
-  WinbarHost.remember(win)
-  vim.wo[win].winbar = Render.render(win, config)
-end
-
 function M.refresh()
   if not M.enabled then return end
 
   if is_tabline_target() then
     local win = M.interaction_win()
     for _, w in ipairs(vim.api.nvim_tabpage_list_wins(0)) do
-      WinbarHost.restore(w)
       WinbarHost.clear_orphan(w)
+      WinbarHost.restore(w)
     end
 
     if win and Window.should_show(win) then
       set_showtabline(2)
-      vim.o.tabline = Render.render(win, config)
+      local diag_snapshot = config.diagnostics.enabled and Diagnostics.snapshot() or {}
+      vim.o.tabline = Render.render(win, config, diag_snapshot)
     else
       vim.o.tabline = ''
       if config.hide_tabline then set_showtabline(0) end
@@ -213,8 +198,22 @@ function M.refresh()
     return
   end
 
+  -- 只在存在展示目标时聚合；本轮所有分屏共享同一快照，不跨刷新缓存
+  local diag_snapshot
   for _, win in ipairs(vim.api.nvim_tabpage_list_wins(0)) do
-    apply_winbar(win)
+    if vim.api.nvim_win_is_valid(win) then
+      -- 预览态下若窗口已有固定分组，should_show 仍为真，标签栏保留可见
+      if Window.should_show(win) then
+        if not diag_snapshot then
+          diag_snapshot = config.diagnostics.enabled and Diagnostics.snapshot() or {}
+        end
+        WinbarHost.apply(win, Render.render(win, config, diag_snapshot))
+      else
+        -- 先清理未登记的 split 继承串，不能在 restore 释放记录后误清后来 owner
+        WinbarHost.clear_orphan(win)
+        WinbarHost.restore(win)
+      end
+    end
   end
 end
 

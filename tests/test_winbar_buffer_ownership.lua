@@ -1,0 +1,170 @@
+local H = dofile(vim.env.VV_TEST_REPO .. '/tests/helpers.lua')
+local T, child = H.new_set({ setup = 'fixture_smoke.lua', icons = true })
+
+local function run(case)
+  child.lua_func(function()
+    BufferOwner = {}
+    function BufferOwner.read()
+      return vim.api.nvim_get_option_value('winbar', { win = 0, scope = 'local' })
+    end
+    function BufferOwner.write(value)
+      vim.api.nvim_set_option_value('winbar', value, { win = 0, scope = 'local' })
+    end
+    function BufferOwner.rendered(name)
+      local raw = BufferOwner.read()
+      assert(raw:find('VVBufferline', 1, true), '前置条件：未加载真实 winbar')
+      local text = vim.api.nvim_eval_statusline(raw, { winid = 0, use_winbar = true }).str
+      assert(text:find(name, 1, true), '真实 winbar 未显示文件：' .. name)
+    end
+    function BufferOwner.start(b_value)
+      -- 启用前在同一窗口实际访问 A/B，依靠 Neovim 恢复各自的 raw local。
+      vim.cmd.edit(vim.env.VV_TEST_TMP .. '/a.txt')
+      local a = vim.api.nvim_get_current_buf()
+      BufferOwner.write('A_LOCAL')
+      vim.cmd.edit(vim.env.VV_TEST_TMP .. '/b.txt')
+      local b = vim.api.nvim_get_current_buf()
+      assert(BufferOwner.read() == '', '前置条件：新 B 不应继承 A 的局部值')
+      BufferOwner.write(b_value)
+      vim.api.nvim_set_current_buf(a)
+      assert(BufferOwner.read() == 'A_LOCAL', '前置条件：重访 A 未恢复自己的局部值')
+      Smoke.setup({ diagnostics = { enabled = false }, hover_close = false, keys = false })
+      BufferOwner.rendered('a.txt')
+      return require('vv-bufferline'), a, b
+    end
+    function BufferOwner.preview_mismatch()
+      local bl, a, b = BufferOwner.start('B_LOCAL')
+      bl.disable()
+      vim.bo[a].buftype = 'nofile'
+      vim.bo[b].buftype = 'nofile'
+      vim.cmd.edit(vim.env.VV_TEST_TMP .. '/anchor.txt')
+      BufferOwner.write('ANCHOR_LOCAL')
+      bl.enable()
+      local win = vim.api.nvim_get_current_win()
+      bl.mark_preview(win, b)
+      vim.api.nvim_set_current_buf(b)
+      require('vv-bufferline.view').refresh()
+      BufferOwner.rendered('anchor.txt')
+      local b_applied = BufferOwner.read()
+      vim.api.nvim_set_current_buf(a)
+      bl.mark_preview(win, a)
+      -- 两个预览只展示相同的非活动 anchor 标签，真实渲染串恰好相等。
+      assert(BufferOwner.read() == b_applied, '前置条件：两个预览的真实渲染串应相同')
+      vim.api.nvim_set_current_buf(b)
+      assert(BufferOwner.read() == b_applied, '前置条件：B 应恢复其隐藏历史中的渲染串')
+      assert(not require('vv-bufferline.window').should_show(win), '前置条件：B 已不再是预览目标')
+      return bl, b_applied
+    end
+  end)
+  child.lua_func(case)
+end
+
+T['同窗 A 与 B 各自恢复接管前基线且同 buffer 刷新不重记'] = function()
+  run(function()
+    local bl, _, b = BufferOwner.start('B_LOCAL')
+    bl.disable()
+    assert(BufferOwner.read() == 'A_LOCAL', 'A 未恢复自己的基线')
+    bl.enable()
+    local win = vim.api.nvim_get_current_win()
+    vim.api.nvim_set_current_buf(b)
+    assert(vim.api.nvim_get_current_win() == win and BufferOwner.read() == 'B_LOCAL',
+      '前置条件：同窗重访 B 未恢复 B_LOCAL')
+    vim.wait(50)
+    BufferOwner.rendered('b.txt')
+    vim.api.nvim_buf_set_name(b, vim.env.VV_TEST_TMP .. '/renamed-b.txt')
+    require('vv-bufferline.view').refresh()
+    BufferOwner.rendered('renamed-b.txt')
+    bl.disable()
+    assert(BufferOwner.read() == 'B_LOCAL', '关闭把 A 基线写给 B 或同 buffer 刷新丢失 B 基线')
+    bl.disable()
+    vim.wait(50)
+    assert(BufferOwner.read() == 'B_LOCAL', '重复关闭或旧刷新改写了 B 基线')
+  end)
+end
+
+T['新 B 的空 raw local 在重配关闭后仍跟随 global'] = function()
+  run(function()
+    vim.api.nvim_set_option_value('winbar', 'GLOBAL_BEFORE', { scope = 'global' })
+    local bl = BufferOwner.start('B_LOCAL')
+    vim.cmd.edit(vim.env.VV_TEST_TMP .. '/fresh.txt')
+    assert(BufferOwner.read() == '', '前置条件：新 buffer 的 raw local 应为空')
+    vim.wait(50)
+    BufferOwner.rendered('fresh.txt')
+    vim.api.nvim_set_option_value('winbar', 'GLOBAL_AFTER', { scope = 'global' })
+    bl.setup({ diagnostics = { enabled = false }, hover_close = false, keys = false })
+    BufferOwner.rendered('fresh.txt')
+    bl.disable()
+    assert(BufferOwner.read() == '', '跨 buffer 重配把 A 基线或 effective 值固化给新 buffer')
+    assert(vim.wo.winbar == 'GLOBAL_AFTER', '空局部值未跟随当前 global')
+    vim.api.nvim_set_option_value('winbar', 'GLOBAL_LATEST', { scope = 'global' })
+    assert(vim.wo.winbar == 'GLOBAL_LATEST', '关闭后 global fallback 被冻结')
+  end)
+end
+
+T['进入不适用 B 后刷新和关闭不写回 A 基线'] = function()
+  run(function()
+    local bl, _, b = BufferOwner.start('B_LOCAL')
+    vim.bo[b].buftype = 'nofile'
+    vim.api.nvim_set_current_buf(b)
+    assert(BufferOwner.read() == 'B_LOCAL', '前置条件：B 原有局部值未恢复')
+    require('vv-bufferline.view').refresh()
+    bl.disable()
+    vim.wait(50)
+    assert(BufferOwner.read() == 'B_LOCAL', '不适用 B 被 A 基线覆盖')
+  end)
+end
+
+T['跨 buffer 刷新仍接管但保留关闭前后来 owner 的不同值'] = function()
+  run(function()
+    local bl, _, b = BufferOwner.start('B_LOCAL')
+    vim.api.nvim_set_current_buf(b)
+    require('vv-bufferline.view').refresh()
+    BufferOwner.rendered('b.txt')
+    BufferOwner.write('INTERMEDIATE_OWNER')
+    require('vv-bufferline.view').refresh()
+    BufferOwner.rendered('b.txt')
+    bl.disable()
+    assert(BufferOwner.read() == 'B_LOCAL', '启用刷新改变了 B 的初始基线')
+    bl.enable()
+    BufferOwner.rendered('b.txt')
+    BufferOwner.write('LATER_OWNER')
+    bl.disable()
+    bl.disable()
+    vim.wait(50)
+    assert(BufferOwner.read() == 'LATER_OWNER', '关闭或排队刷新覆盖了后来 owner')
+  end)
+end
+
+T['跨 buffer 后来 owner 清空局部值时保留 global fallback'] = function()
+  run(function()
+    local bl, _, b = BufferOwner.start('B_LOCAL')
+    vim.api.nvim_set_current_buf(b)
+    require('vv-bufferline.view').refresh()
+    BufferOwner.rendered('b.txt')
+    vim.api.nvim_set_option_value('winbar', 'GLOBAL', { scope = 'global' })
+    BufferOwner.write('')
+    bl.disable()
+    assert(BufferOwner.read() == '' and vim.wo.winbar == 'GLOBAL', '后来 owner 的空局部值被覆盖')
+  end)
+end
+
+T['不同 buffer 的真实渲染串相同时 disable 仍须核对身份'] = function()
+  run(function()
+    local bl, b_applied = BufferOwner.preview_mismatch()
+    bl.disable()
+    vim.wait(50)
+    assert(BufferOwner.read() == b_applied, 'raw 相等不能证明同 buffer，关闭误写了其他 buffer 基线')
+  end)
+end
+
+T['失配释放前孤儿清理不能绕过 buffer 身份保护'] = function()
+  run(function()
+    local bl, b_applied = BufferOwner.preview_mismatch()
+    require('vv-bufferline.view').refresh()
+    assert(BufferOwner.read() == b_applied, '孤儿清理或 restore 绕过身份守卫改写了 B')
+    bl.disable()
+    vim.wait(50)
+    assert(BufferOwner.read() == b_applied, '释放后的 disable 再次改写 B')
+  end)
+end
+
+return T
